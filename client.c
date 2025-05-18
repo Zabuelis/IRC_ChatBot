@@ -7,6 +7,7 @@
 #include <signal.h>
 #include <stdbool.h>
 #include <curl/curl.h>
+#include <cjson/cJSON.h>
 
 #define SERVER "10.1.0.46"
 #define PORT 6667
@@ -26,6 +27,8 @@ char* get_message(char buffer[]);
 void authentication(int client_fd);
 void curl_LLM(char prompt_LLM[]);
 char* format_message(char user_message[]);
+void get_LLM_message(char message_LLM[]);
+char* get_ping(char bufferp[]);
 
 int main(){
     int client_fd, valread = 0, status, tmp_valread=1;
@@ -62,34 +65,45 @@ int main(){
     sleep(2);
     dprintf(client_fd, "PRIVMSG %s :%s\r\n", TEST_CHANNEL, hello);
     printf("Hello message sent\n");
-    while(true){
-        if (counter <= 0){
-            break;
-        } else{
-            memset(buffer, 0, sizeof(buffer));
-            valread = read(client_fd, buffer, sizeof(buffer) - 1);
+    while(counter > 0){
+        memset(buffer, 0, sizeof(buffer));
+        valread = read(client_fd, buffer, sizeof(buffer) - 1);
 
-            if (valread != tmp_valread) {
-                char *user_message;
-                tmp_valread = valread;
-                if(strstr(buffer, target_channel)){
-                    user_message = get_message(buffer);
-                    printf("User message: %s", user_message);
-                    format_message(user_message);
-                    snprintf(prompt_LLM, sizeof(prompt_LLM), "{\"model\": \"llama3.2\", \"prompt\": \"%s\"}", user_message);
+        if (valread != tmp_valread) {
+            fptr = fopen("./logs/chat.log", "a");
+            char *user_message;
+            tmp_valread = valread;
+            char message_LLM[2048] = { 0 };
+            fprintf(fptr, "%s", buffer);
+            fprintf(fptr, "\n");
+            if(strstr(buffer, target_channel)){
 
-                    curl_LLM(prompt_LLM);
-                    fopen("./responses/response.json", "r");
-                    char buff[100];
-                    while(fgets(buff, sizeof(buff), fptr) != NULL){
-                        dprintf(client_fd, "PRIVMSG %s :%s\r\n", TEST_CHANNEL, buff);
-                    }
-                    fclose(fptr);
+                user_message = get_message(buffer);
+                printf("User message: %s", user_message);
+                format_message(user_message);
+                snprintf(prompt_LLM, sizeof(prompt_LLM), "{\"model\": \"llama3.2\", \"prompt\": \"%s\"}", user_message);
+
+                curl_LLM(prompt_LLM);
+
+                get_LLM_message(message_LLM);
+
+                dprintf(client_fd, "PRIVMSG %s :%s\r\n", TEST_CHANNEL, message_LLM);
+                fprintf(fptr, "%s BOT: %s", TEST_CHANNEL, message_LLM);
+                fprintf(fptr, "\n");
+
+            }else if(strstr(buffer, "PING :")){
+                char *ping_message = NULL;
+                char pong_message[128] = { "PONG :" };
+                ping_message = get_ping(buffer);
+                strcat(pong_message, ping_message);
+                if (send(client_fd, pong_message, strlen(pong_message), 0) <= 0){
+                    perror("Error sending PONG");
                 }
-                fptr = fopen("./logs/chat.log", "a");
-                fprintf(fptr, "%s", buffer);
-                fclose(fptr);
+                fprintf(fptr, "%s", pong_message);
+                fprintf(fptr, "\n");
             }
+            fclose(fptr);
+            memset(message_LLM, 0, sizeof(message_LLM));
         }
     }
 
@@ -113,6 +127,14 @@ char* get_message(char buffer[]){
     }
     
     return message;
+}
+
+char* get_ping(char buffer[]){
+    char *ping = strstr(buffer, "PING :");
+    if(ping){
+        return ping + 6;
+    }
+    return NULL;
 }
 
 char* format_message(char *user_message){
@@ -169,5 +191,29 @@ void curl_LLM(char prompt_LLM[]){
   curl_easy_cleanup(hnd);
   hnd = NULL;
   fclose(fileptr);
+}
+
+void get_LLM_message(char message_LLM[]){
+    cJSON *response = NULL;
+    char line[2048];
+    FILE *fptr = fopen("responses/response.json", "r");
+
+
+    while(fgets(line, sizeof(line), fptr)){
+        cJSON *string = cJSON_Parse(line);
+        if(string == NULL){
+            perror("Error reading JSON file");
+        }
+
+        response = cJSON_GetObjectItemCaseSensitive(string, "response");
+        if(cJSON_IsString(response) && (response->valuestring != NULL)){
+            strcat(message_LLM, response->valuestring);
+        }
+
+        cJSON_Delete(string);
+    }
+
+
+    fclose(fptr);
 }
 
