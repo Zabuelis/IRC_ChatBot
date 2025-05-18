@@ -69,10 +69,9 @@ int main(){
         memset(buffer, 0, sizeof(buffer));
         valread = read(client_fd, buffer, sizeof(buffer) - 1);
 
-        if (valread != tmp_valread) {
+        if (valread > 0) {
             fptr = fopen("./logs/chat.log", "a");
             char *user_message;
-            tmp_valread = valread;
             char message_LLM[2048] = { 0 };
             fprintf(fptr, "%s", buffer);
             fprintf(fptr, "\n");
@@ -92,14 +91,9 @@ int main(){
                 fprintf(fptr, "\n");
 
             }else if(strstr(buffer, "PING :")){
-                char *ping_message = NULL;
-                char pong_message[128] = { "PONG :" };
-                ping_message = get_ping(buffer);
-                strcat(pong_message, ping_message);
-                if (send(client_fd, pong_message, strlen(pong_message), 0) <= 0){
-                    perror("Error sending PONG");
-                }
-                fprintf(fptr, "%s", pong_message);
+                char pong_message[6] = { "PONG\r\n" };
+                send(client_fd, pong_message, strlen(pong_message), 0);
+                fprintf(fptr, "PING RESPONSE: %s", pong_message);
                 fprintf(fptr, "\n");
             }
             fclose(fptr);
@@ -127,14 +121,6 @@ char* get_message(char buffer[]){
     }
     
     return message;
-}
-
-char* get_ping(char buffer[]){
-    char *ping = strstr(buffer, "PING :");
-    if(ping){
-        return ping + 6;
-    }
-    return NULL;
 }
 
 char* format_message(char *user_message){
