@@ -1,72 +1,43 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <unistd.h>
-#include <netdb.h>
-#include <sys/socket.h>
-#include <signal.h>
 #include <stdbool.h>
 #include <curl/curl.h>
 #include <cjson/cJSON.h>
 #include <pthread.h>
+#include <unistd.h>
+#include <signal.h>
 
-#define SERVER "10.1.0.46"
-#define PORT 6667
-#define NICK "bkaza0056"
-#define TEST_CHANNEL "#cave"
+#define TEST_CHANNEL "#forTesting"
 
-static int counter = 2;
-char buffer[1024] = { 0 };
+char buffer[2048] = { 0 };
 pthread_mutex_t message_mutex;
 pthread_cond_t message_ready;
-int client_fd;
 bool compile_response = false;
+int client_fd;
+int counter = 2;
+bool cancel_threads = false;
 
 void catch_signal (int sig_num){
     printf("\nExit signal caught \n");
     printf("If you wan't to continue press %i times\n", counter);
     counter--;
+    cancel_threads = true;
     fflush(stdout);
+    sleep(3);
 }
 
-char* get_message(char buffer[]);
-void authentication(int client_fd);
-void curl_LLM(char prompt_LLM[]);
-char* format_message(char user_message[]);
-void get_LLM_message(char message_LLM[]);
 void* server_listener(void* arg);
 void* message_compilator(void* arg);
+char* get_message(char buffer[]);
+void get_LLM_message(char message_LLM[]);
+void curl_LLM(char prompt_LLM[]);
+char* format_message(char *user_message);
 
-int main(){
-    int status;
-    struct sockaddr_in serv_addr;
-    char *hello = "Hello I am a bot";
 
+int handle_communications(int fd){
+    client_fd = fd;
     signal(SIGINT, catch_signal);
-
-    if((client_fd = socket(AF_INET, SOCK_STREAM, 0)) < 0){
-        printf("\n Socket creation error \n");
-        return -1;
-    }
-
-    serv_addr.sin_family = AF_INET;
-    serv_addr.sin_port = htons(PORT);
-
-    if (inet_pton(AF_INET, SERVER, &serv_addr.sin_addr) <= 0){
-        printf("\n Address not supported \n");
-        return -1;
-    }
-
-    if((status = connect(client_fd, (struct sockaddr*)&serv_addr, sizeof(serv_addr))) < 0){
-        printf("\n Connection failed \n");
-        return -1;
-    }
-
-    authentication(client_fd);
-    dprintf(client_fd, "JOIN %s\r\n", TEST_CHANNEL);
-    sleep(2);
-    dprintf(client_fd, "PRIVMSG %s :%s\r\n", TEST_CHANNEL, hello);
-    printf("Hello message sent\n");
 
     pthread_t listener, compilator;
 
@@ -90,14 +61,12 @@ int main(){
         return -1;
     }
 
-    while (counter > 0) {
+    while(!cancel_threads){
         sleep(1);
     }
-
+    
     pthread_mutex_destroy(&message_mutex);
     pthread_cond_destroy(&message_ready);
-    printf("Exiting...\n");
-    close(client_fd);
     return 0;
 }
 
@@ -105,7 +74,7 @@ void* server_listener(void* arg){
     char target_channel[256] = "PRIVMSG ";
     strcat(target_channel, TEST_CHANNEL);
 
-    while(1){
+    while(!cancel_threads){
         FILE *fptr = fopen("./logs/chat.log", "a");
         pthread_mutex_lock(&message_mutex);
         memset(buffer, 0, sizeof(buffer));
@@ -113,23 +82,27 @@ void* server_listener(void* arg){
         if (valread > 0) {
             fprintf(fptr, "%s", buffer);
             if(strstr(buffer, "PING :")){
-                char pong_message[6] = { "PONG\r\n" };
+                char pong_message[] = "PONG\r\n";
                 send(client_fd, pong_message, strlen(pong_message), 0);
                 fprintf(fptr, "PING RESPONSE: %s", pong_message);
-            } else if(strstr(buffer, target_channel) && compile_response != true){
+            } else if(strstr(buffer, target_channel) && !compile_response){
                 compile_response = true;
                 pthread_cond_signal(&message_ready);
             }
-            pthread_mutex_unlock(&message_mutex);
-            fclose(fptr);
+        } else {
+            printf("aaaa");
         }
+        fclose(fptr);
+        pthread_mutex_unlock(&message_mutex);
+        sleep(3);
     }
+    return NULL;
 }
 
 void* message_compilator(void* arg){
 
-    while(1){
-
+    while(!cancel_threads){
+        printf("Compilator loop");
         pthread_mutex_lock(&message_mutex);
         while(!compile_response){
             pthread_cond_wait(&message_ready, &message_mutex);
@@ -139,34 +112,25 @@ void* message_compilator(void* arg){
         char prompt_LLM[1024] = { 0 };
         char message_LLM[4096] = { 0 };
         user_message = get_message(buffer);
+        compile_response = false;
+        pthread_mutex_unlock(&message_mutex);
         printf("User message: %s", user_message);
+
         user_message = format_message(user_message);
         snprintf(prompt_LLM, sizeof(prompt_LLM), "{\"model\": \"llama3.2\", \"prompt\": \"%s\"}", user_message);
 
-        pthread_mutex_unlock(&message_mutex);
-
         curl_LLM(prompt_LLM);
-
         get_LLM_message(message_LLM);
-
         dprintf(client_fd, "PRIVMSG %s :%s\r\n", TEST_CHANNEL, message_LLM);
-        memset(prompt_LLM, 0, sizeof(prompt_LLM));
-        memset(message_LLM, 0, sizeof(message_LLM));
-        compile_response = false;
 
         fprintf(fptr, "%s BOT: %s", TEST_CHANNEL, message_LLM);
+        memset(prompt_LLM, 0, sizeof(prompt_LLM));
+        memset(message_LLM, 0, sizeof(message_LLM));
         fprintf(fptr, "\n");
         fclose(fptr);
 
     }
-}
-
-void authentication(int client_fd){
-    dprintf(client_fd, "NICK %s\r\n", NICK);
-    sleep(2);
-    dprintf(client_fd, "USER %s 0 * :%s\r\n", NICK, NICK);
-    sleep(2);
-    return;
+    return NULL;
 }
 
 char* get_message(char buffer[]){
@@ -179,10 +143,8 @@ char* get_message(char buffer[]){
 }
 
 char* format_message(char *user_message){
-    for(int i = strlen(user_message) - 4; user_message[i] != '\0'; i++){
-        if(user_message[i] == '\n'){
-            user_message[i] = ' ';
-        } else if (user_message[i] == '\r'){
+    for(int i = 0; user_message[i] != '\0'; i++){
+        if(user_message[i] == '\n' || user_message[i] == '\r'){
             user_message[i] = ' ';
         }
     }
@@ -208,24 +170,6 @@ void curl_LLM(char prompt_LLM[]){
   curl_easy_setopt(hnd, CURLOPT_FTP_SKIP_PASV_IP, 1L);
   curl_easy_setopt(hnd, CURLOPT_TCP_KEEPALIVE, 1L);
   curl_easy_setopt(hnd, CURLOPT_WRITEDATA, fileptr);
-
-  /* Here is a list of options the curl code used that cannot get generated
-     as source easily. You may choose to either not use them or implement
-     them yourself.
-
-  CURLOPT_WRITEDATA was set to an object pointer
-  CURLOPT_INTERLEAVEDATA was set to an object pointer
-  CURLOPT_WRITEFUNCTION was set to a function pointer
-  CURLOPT_READDATA was set to an object pointer
-  CURLOPT_READFUNCTION was set to a function pointer
-  CURLOPT_SEEKDATA was set to an object pointer
-  CURLOPT_SEEKFUNCTION was set to a function pointer
-  CURLOPT_ERRORBUFFER was set to an object pointer
-  CURLOPT_STDERR was set to an object pointer
-  CURLOPT_HEADERFUNCTION was set to a function pointer
-  CURLOPT_HEADERDATA was set to an object pointer
-
-  */
 
   ret = curl_easy_perform(hnd);
 
@@ -257,4 +201,3 @@ void get_LLM_message(char message_LLM[]){
 
     fclose(fptr);
 }
-
