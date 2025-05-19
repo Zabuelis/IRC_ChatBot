@@ -8,13 +8,19 @@
 #include <stdbool.h>
 #include <curl/curl.h>
 #include <cjson/cJSON.h>
+#include <pthread.h>
 
 #define SERVER "10.1.0.46"
 #define PORT 6667
 #define NICK "bkaza0056"
-#define TEST_CHANNEL "#forTesting"
+#define TEST_CHANNEL "#cave"
 
 static int counter = 2;
+char buffer[1024] = { 0 };
+pthread_mutex_t message_mutex;
+pthread_cond_t message_ready;
+int client_fd;
+bool compile_response = false;
 
 void catch_signal (int sig_num){
     printf("\nExit signal caught \n");
@@ -28,17 +34,13 @@ void authentication(int client_fd);
 void curl_LLM(char prompt_LLM[]);
 char* format_message(char user_message[]);
 void get_LLM_message(char message_LLM[]);
-char* get_ping(char bufferp[]);
+void* server_listener(void* arg);
+void* message_compilator(void* arg);
 
 int main(){
-    int client_fd, valread = 0, status, tmp_valread=1;
+    int status;
     struct sockaddr_in serv_addr;
     char *hello = "Hello I am a bot";
-    char buffer[1024] = { 0 };
-    FILE *fptr;
-    char target_channel[256] = "PRIVMSG ";
-    char prompt_LLM[1024] = { 0 };
-    strcat(target_channel, TEST_CHANNEL);
 
     signal(SIGINT, catch_signal);
 
@@ -65,45 +67,98 @@ int main(){
     sleep(2);
     dprintf(client_fd, "PRIVMSG %s :%s\r\n", TEST_CHANNEL, hello);
     printf("Hello message sent\n");
-    while(counter > 0){
-        memset(buffer, 0, sizeof(buffer));
-        valread = read(client_fd, buffer, sizeof(buffer) - 1);
 
-        if (valread > 0) {
-            fptr = fopen("./logs/chat.log", "a");
-            char *user_message;
-            char message_LLM[2048] = { 0 };
-            fprintf(fptr, "%s", buffer);
-            fprintf(fptr, "\n");
-            if(strstr(buffer, target_channel)){
+    pthread_t listener, compilator;
 
-                user_message = get_message(buffer);
-                printf("User message: %s", user_message);
-                format_message(user_message);
-                snprintf(prompt_LLM, sizeof(prompt_LLM), "{\"model\": \"llama3.2\", \"prompt\": \"%s\"}", user_message);
-
-                curl_LLM(prompt_LLM);
-
-                get_LLM_message(message_LLM);
-
-                dprintf(client_fd, "PRIVMSG %s :%s\r\n", TEST_CHANNEL, message_LLM);
-                fprintf(fptr, "%s BOT: %s", TEST_CHANNEL, message_LLM);
-                fprintf(fptr, "\n");
-
-            }else if(strstr(buffer, "PING :")){
-                char pong_message[6] = { "PONG\r\n" };
-                send(client_fd, pong_message, strlen(pong_message), 0);
-                fprintf(fptr, "PING RESPONSE: %s", pong_message);
-                fprintf(fptr, "\n");
-            }
-            fclose(fptr);
-            memset(message_LLM, 0, sizeof(message_LLM));
-        }
+    if(pthread_mutex_init(&message_mutex, NULL) != 0){
+        perror("Mutex creation failed");
+        return -1;
     }
 
+    if(pthread_cond_init(&message_ready, NULL) != 0){
+        perror("Condition creation failed");
+        return -1;
+    }
+    
+    if(pthread_create(&listener, NULL, &server_listener, NULL) != 0){
+        perror("Listener thread failed to create");
+        return -1;
+    }
+
+    if(pthread_create(&compilator, NULL, &message_compilator, NULL) != 0){
+        perror("Compilator thread failed to create");
+        return -1;
+    }
+
+    while (counter > 0) {
+        sleep(1);
+    }
+
+    pthread_mutex_destroy(&message_mutex);
+    pthread_cond_destroy(&message_ready);
     printf("Exiting...\n");
     close(client_fd);
     return 0;
+}
+
+void* server_listener(void* arg){
+    char target_channel[256] = "PRIVMSG ";
+    strcat(target_channel, TEST_CHANNEL);
+
+    while(1){
+        FILE *fptr = fopen("./logs/chat.log", "a");
+        pthread_mutex_lock(&message_mutex);
+        memset(buffer, 0, sizeof(buffer));
+        int valread = read(client_fd, buffer, sizeof(buffer) - 1);
+        if (valread > 0) {
+            fprintf(fptr, "%s", buffer);
+            if(strstr(buffer, "PING :")){
+                char pong_message[6] = { "PONG\r\n" };
+                send(client_fd, pong_message, strlen(pong_message), 0);
+                fprintf(fptr, "PING RESPONSE: %s", pong_message);
+            } else if(strstr(buffer, target_channel) && compile_response != true){
+                compile_response = true;
+                pthread_cond_signal(&message_ready);
+            }
+            pthread_mutex_unlock(&message_mutex);
+            fclose(fptr);
+        }
+    }
+}
+
+void* message_compilator(void* arg){
+
+    while(1){
+
+        pthread_mutex_lock(&message_mutex);
+        while(!compile_response){
+            pthread_cond_wait(&message_ready, &message_mutex);
+        }
+        FILE *fptr = fopen("./logs/chat.log", "a");
+        char *user_message;
+        char prompt_LLM[1024] = { 0 };
+        char message_LLM[4096] = { 0 };
+        user_message = get_message(buffer);
+        printf("User message: %s", user_message);
+        user_message = format_message(user_message);
+        snprintf(prompt_LLM, sizeof(prompt_LLM), "{\"model\": \"llama3.2\", \"prompt\": \"%s\"}", user_message);
+
+        pthread_mutex_unlock(&message_mutex);
+
+        curl_LLM(prompt_LLM);
+
+        get_LLM_message(message_LLM);
+
+        dprintf(client_fd, "PRIVMSG %s :%s\r\n", TEST_CHANNEL, message_LLM);
+        memset(prompt_LLM, 0, sizeof(prompt_LLM));
+        memset(message_LLM, 0, sizeof(message_LLM));
+        compile_response = false;
+
+        fprintf(fptr, "%s BOT: %s", TEST_CHANNEL, message_LLM);
+        fprintf(fptr, "\n");
+        fclose(fptr);
+
+    }
 }
 
 void authentication(int client_fd){
@@ -181,7 +236,7 @@ void curl_LLM(char prompt_LLM[]){
 
 void get_LLM_message(char message_LLM[]){
     cJSON *response = NULL;
-    char line[2048];
+    char line[4069];
     FILE *fptr = fopen("responses/response.json", "r");
 
 
