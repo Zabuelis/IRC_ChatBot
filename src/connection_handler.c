@@ -32,7 +32,6 @@ int establish_connection(){
             printf("Connection established\n");
             authentication(client_fd);
             printf("Connected to the server\n");
-            dprintf(client_fd, "JOIN %s\r\n", TEST_CHANNEL);
             if(handle_communications(client_fd) == -1){
                 perror ("Thread creation failed");
                 break;
