@@ -5,21 +5,38 @@
 #include <curl/curl.h>
 #include <cjson/cJSON.h>
 #include <message_compilator.h>
+#include <communication_handler.h>
+#include <unistd.h>
 
+struct RequestLLM {
+    int listener_id;
+    char prompt[1024];
+};
 
 char* format_message(char user_message[]);
 void curl_LLM(char prompt_LLM[]);
 void get_LLM_message(char message_LLM[]);
 
-void message_compilator(char message_LLM[], char *user_message){
+void message_compilator(int listener_to_llm, int llm_to_listener[][2]){
+    struct RequestLLM request;
     char prompt_LLM[1024] = { 0 };
-    user_message = format_message(user_message);
-    snprintf(prompt_LLM, sizeof(prompt_LLM), "{\"model\": \"llama3.2\", \"prompt\": \"%s\"}", user_message);
+    char message_LLM[4096] = { 0 };
 
-    curl_LLM(prompt_LLM);
-    get_LLM_message(message_LLM);
+    while(counter > 0){
+            if(read(listener_to_llm, &request, sizeof(request)) > 0){
 
-    memset(prompt_LLM, 0, sizeof(prompt_LLM));
+            char *user_message = format_message(request.prompt);
+            snprintf(prompt_LLM, sizeof(prompt_LLM), "{\"model\": \"llama3.2\", \"prompt\": \"%s\"}", user_message);
+
+            curl_LLM(prompt_LLM);
+            get_LLM_message(message_LLM);
+
+            write(llm_to_listener[request.listener_id][1], message_LLM, sizeof(message_LLM));
+
+            memset(prompt_LLM, 0, sizeof(prompt_LLM));
+            memset(message_LLM, 0, sizeof(message_LLM));
+        }
+    }
 }
 
 
