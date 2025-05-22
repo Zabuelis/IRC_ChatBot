@@ -3,6 +3,4 @@
 
 int handle_communications(int client_fd);
 
-extern int counter;
-
 #endif

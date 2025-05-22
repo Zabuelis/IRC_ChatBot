@@ -16,13 +16,26 @@
 #define LLM_SEMAPHORE "/llm_semaphore"
 #define WRITE_SERVER "/to_server"
 
-int counter = 2;
+int channel_num = 2;
 
-void catch_signal (int sig_num){
-    printf("\nExit signal caught \n");
-    printf("Closing gratefully\n");
-    counter--;
-    
+pid_t channel_workers[32];
+pid_t central_reader;
+pid_t response_generator;
+
+void handle_exit(){
+    printf("Performing graceful exit... Please wait...\n");
+    kill(central_reader, SIGINT);
+    kill(response_generator, SIGINT);
+    for(int i = 0; i < channel_num; i++){
+        kill(channel_workers[i], SIGINT);
+    }
+}
+
+void sig_action_setup(){
+    struct sigaction sa;
+    sa.sa_handler = handle_exit;
+    sa.sa_flags = 0;
+    sigaction(SIGINT, &sa, NULL);;
 }
 
 struct RequestLLM {
@@ -31,7 +44,7 @@ struct RequestLLM {
 };
 
 void server_reader(int client_fd, int reader_to_listener[][2], int channel_num, char *channels[32]);
-char* get_message(char buffer[]);
+void get_message(char buffer[]);
 void server_listener(int client_fd, char channel[], int listener_id, int listener_to_llm, int llm_to_listener, int reader_to_listener);
 
 int handle_communications(int client_fd){
@@ -40,15 +53,26 @@ int handle_communications(int client_fd){
     char *channels[32] = {
         "#testingFor", "#forTesting"
     };
-    int channel_num = 2;
 
-    pid_t channel_workers[channel_num];
-    pid_t central_reader;
-    pid_t response_generator;
 
     int reader_to_listener[channel_num][2];
     int listener_to_llm[2];
     int llm_to_listener[channel_num][2];
+
+    // int shm_id = shmget(1234, sizeof(counter), 0666 | IPC_CREAT);
+    // if(shm_id == -1){
+    //     perror("Shared memory error");
+    //     return -1;
+    // }
+
+    // counter = shmat(shm_id, NULL, 0);
+    // if(counter == (void *)-1){
+    //     perror("Shared memory attachment error");
+    //     return -1;
+    // }
+
+    // *counter = 2;
+
 
     for(int i = 0; i < channel_num; i++){
         if(pipe(reader_to_listener[i])){
@@ -68,8 +92,6 @@ int handle_communications(int client_fd){
         perror("Listener to llm pipes failed");
         return -1;
     }
-
-    signal(SIGINT, catch_signal);
 
     response_semaphore = sem_open(LLM_SEMAPHORE, O_CREAT | O_EXCL, 0600, 1);
     if(response_semaphore == NULL){
@@ -129,6 +151,8 @@ int handle_communications(int client_fd){
         }
     }
 
+    sig_action_setup();
+
     waitpid(central_reader, NULL, 0);
 
     waitpid(response_generator, NULL, 0);
@@ -137,8 +161,13 @@ int handle_communications(int client_fd){
         waitpid(channel_workers[i], NULL, 0);
     }
 
+    // shmdt(counter);
+    // shmctl(shm_id, IPC_RMID, NULL);
+
     sem_close(to_server_semaphore);
     sem_unlink(WRITE_SERVER);
+
+    dprintf(client_fd, "QUIT");
 
     sem_close(response_semaphore);
     sem_unlink(LLM_SEMAPHORE);
@@ -155,10 +184,10 @@ void server_listener(int client_fd, char channel[], int listener_id, int listene
     sem_t *to_server_semaphore = sem_open(WRITE_SERVER, 0);
     
 
-    while(counter > 0){
+    while(1){
         if(read(reader_to_listener, request.prompt, sizeof(request.prompt)) > 0){
+            get_message(request.prompt);
             printf("Message inside listener %s\n", request.prompt);
-            char *user_message = get_message(request.prompt);
             sem_wait(response_semaphore);
             write(listener_to_llm, &request, sizeof(request));
             read(llm_to_listener, message_LLM, sizeof(message_LLM));
@@ -177,7 +206,7 @@ void server_reader(int client_fd, int reader_to_listener[][2], int channel_num, 
     char buffer[1024] = { 0 };
     char target_channel[256] = { 0 };
     sem_t *to_server_semaphore = sem_open(WRITE_SERVER, 0);
-    while(counter > 0){
+    while(1){
         memset(buffer, 0, sizeof(buffer));
         int valread = read(client_fd, buffer, sizeof(buffer) - 1);
         if (valread > 0) {
@@ -202,11 +231,10 @@ void server_reader(int client_fd, int reader_to_listener[][2], int channel_num, 
         }
     }
 }
-char* get_message(char buffer[]){
-    char *message = strstr(buffer, " :");
-    if(message != NULL){
-        message += 2;
+void get_message(char buffer[]){
+    buffer = strstr(buffer, " :");
+    printf("Buffer in handler %s", buffer);
+    if(buffer != NULL){
+        buffer += 2;
     }
-    
-    return message;
 }

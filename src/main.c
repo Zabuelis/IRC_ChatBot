@@ -5,6 +5,6 @@ int main(){
     if(establish_connection() == -1){
         printf("Socket creation failed");
     }
-    printf("Exiting...\n");
+    printf("Bye\n");
     return 1;
 }

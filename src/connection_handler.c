@@ -33,7 +33,7 @@ int establish_connection(){
             authentication(client_fd);
             printf("Connected to the server\n");
             if(handle_communications(client_fd) == -1){
-                perror ("Socket creation failed");
+                perror ("Process creation failed");
                 break;
             } else {
                 close(client_fd);

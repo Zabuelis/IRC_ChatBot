@@ -22,7 +22,7 @@ void message_compilator(int listener_to_llm, int llm_to_listener[][2]){
     char prompt_LLM[1024] = { 0 };
     char message_LLM[4096] = { 0 };
 
-    while(counter > 0){
+    while(1){
             if(read(listener_to_llm, &request, sizeof(request)) > 0){
 
             char *user_message = format_message(request.prompt);
