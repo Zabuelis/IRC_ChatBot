@@ -19,7 +19,7 @@ void get_LLM_message(char message_LLM[]);
 void message_compilator(int listener_to_llm, int llm_to_listener[][2]){
     struct RequestLLM request;
     char prompt_LLM[1024] = { 0 };
-    char message_LLM[4096] = { 0 };
+    char message_LLM[2048] = { 0 };
 
     while(1){
             if(read(listener_to_llm, &request, sizeof(request)) > 0){
