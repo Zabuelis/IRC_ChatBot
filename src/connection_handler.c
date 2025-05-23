@@ -41,7 +41,7 @@ int establish_connection(){
             }
             
         } else {
-            perror("Connection lost... Retrying...");
+            perror("Connection lost... Retrying...\n");
             close(client_fd);
             sleep(5);
         }
