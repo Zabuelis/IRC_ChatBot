@@ -11,6 +11,7 @@
 #include <stdlib.h>
 #include <sys/stat.h>
 #include <sys/shm.h>
+#include <stdbool.h>
 #include <communication_handler.h>
 
 #define LLM_SEMAPHORE "/llm_semaphore"
@@ -231,10 +232,25 @@ void server_reader(int client_fd, int reader_to_listener[][2], int channel_num, 
         }
     }
 }
+
 void get_message(char buffer[]){
-    buffer = strstr(buffer, " :");
-    printf("Buffer in handler %s", buffer);
-    if(buffer != NULL){
-        buffer += 2;
+    int pos = -1;
+    int len;
+    bool is_second = false;
+    for(int i = 0; buffer[i] != '\0'; i++){
+        if(buffer[i] == ':'){
+            pos = i + 1;
+            if(is_second){
+                break;
+            }
+            is_second = true;
+        }
+    }
+
+    if(pos != -1){
+        len = strlen(buffer + pos);
+        memmove(buffer, buffer + pos, len + 1);
+    } else{
+        buffer[0] = '\0';
     }
 }
