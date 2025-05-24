@@ -1,5 +1,0 @@
-ERROR: Git is shared too late .... (no commits before sharing)
-Detail history of commits
-ERROR: Git has been modified after deadline ...
-* ec38cda (HEAD -> main, origin/main, origin/HEAD) (2025-05-14 13:11:34 +0300) Bukauskas Linas <linas.bukauskas@mif.vu.lt> Initial static analysis results
-* fd41f6f (2025-05-14 06:52:59 +0000) Zabulis Karolis <karolis.zabulis@mif.stud.vu.lt> Initial commit

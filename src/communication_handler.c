@@ -17,19 +17,22 @@
 #define LLM_SEMAPHORE "/llm_semaphore"
 #define WRITE_SERVER "/to_server"
 #define WRITE_FILE "/to_file"
+#define MAX_CHANNELS 32
 
-int channel_num = 3;
+int channel_num;
 
-pid_t channel_workers[32];
+pid_t channel_workers[MAX_CHANNELS];
 pid_t central_reader;
 pid_t response_generator;
 pid_t logger;
+pid_t admin;
 
 void handle_exit(){
     printf("Performing graceful exit... Please wait...\n");
     kill(central_reader, SIGINT);
     kill(response_generator, SIGINT);
     kill(logger, SIGINT);
+    kill(admin, SIGINT);
     for(int i = 0; i < channel_num; i++){
         kill(channel_workers[i], SIGINT);
     }
@@ -39,7 +42,7 @@ void sig_action_setup(){
     struct sigaction sa;
     sa.sa_handler = handle_exit;
     sa.sa_flags = 0;
-    sigaction(SIGINT, &sa, NULL);;
+    sigaction(SIGINT, &sa, NULL);
 }
 
 struct RequestLLM {
@@ -47,37 +50,52 @@ struct RequestLLM {
     char prompt[1024];
 };
 
-void server_reader(int client_fd, int reader_to_listener[][2], int channel_num, char *channels[32]);
+struct IgnoredUsers {
+    int count;
+    char user_name[10][10];
+};
+
+void server_reader(int client_fd, int reader_to_listener[][2], int channel_num, char channels[][64], char admin_channel_name[], int reader_to_admin, struct IgnoredUsers *ignored_users);
 void get_message(char buffer[]);
 void server_listener(int client_fd, char channel[], int listener_id, int listener_to_llm, int llm_to_listener, int reader_to_listener, pid_t logger_pid, char *log_message);
 void server_logger(FILE *fptr, char *log_message);
 void logger_wake_signal(int sig);
+void admin_channel(char admin_name[], char admin_pass[], int reader_to_admin, char *log_message, pid_t logger_pid, int client_fd, struct IgnoredUsers *ignored_users);
+int channel_read(FILE *fptr, char channels[][64]);
+void load_admin_config(FILE *fptr, char admin_channel_name[], char admin_channel_password[]);
 
 int handle_communications(int client_fd){
     sem_t *response_semaphore;
     sem_t *to_server_semaphore;
     sem_t *to_file_semaphore;
-    char *channels[32] = {
-        "#testingFor", "#forTesting", "#Unix"
-    };
+    char channels[MAX_CHANNELS][64];
+    char admin_channel_name[64];
+    char admin_channel_password[64];
+
+    FILE* admin_file;
+    admin_file = fopen("config/admin.cfg", "r");
+    if(admin_file == NULL){
+        perror("Failed to access file");
+        return -1;
+    }
+    load_admin_config(admin_file, admin_channel_name, admin_channel_password);
+    fclose(admin_file);
+
+    FILE* channels_file;
+    channels_file = fopen("config/channels.cfg", "r");
+    if(channels_file == NULL){
+        perror("Failed to access file");
+        return -1;
+    }
+    channel_num = channel_read(channels_file, channels);
+    fclose(channels_file);
 
     int reader_to_listener[channel_num][2];
     int listener_to_llm[2];
     int llm_to_listener[channel_num][2];
+    int reader_to_admin[2];
 
     char *log_message;
-
-    int shm_id = shmget(1234, 2048, 0666 | IPC_CREAT);
-    if(shm_id == -1){
-        perror("Shared memory error");
-        return -1;
-    }
-
-    log_message = shmat(shm_id, NULL, 0);
-    if(log_message == (void *)-1){
-        perror("Shared memory attachment error");
-        return -1;
-    }
 
     for(int i = 0; i < channel_num; i++){
         if(pipe(reader_to_listener[i])){
@@ -94,7 +112,12 @@ int handle_communications(int client_fd){
     }
 
     if(pipe(listener_to_llm)){
-        perror("Listener to llm pipes failed");
+        perror("Listener to llm pipe failed");
+        return -1;
+    }
+
+    if(pipe(reader_to_admin)){
+        perror("Reader to admin pipe failed");
         return -1;
     }
 
@@ -116,6 +139,30 @@ int handle_communications(int client_fd){
         return -1;
     }
 
+    int shm_id_logging = shmget(1234, 2048, 0666 | IPC_CREAT);
+    if(shm_id_logging == -1){
+        perror("Shared memory error");
+        return -1;
+    }
+
+    log_message = shmat(shm_id_logging, NULL, 0);
+    if(log_message == (void *)-1){
+        perror("Shared memory attachment error");
+        return -1;
+    }
+
+    int shm_id_ignore = shmget(4321, sizeof(struct IgnoredUsers), 0666 | IPC_CREAT);
+    if(shm_id_ignore == -1){
+        perror("Shared memory error");
+        return -1;
+    }
+
+    struct IgnoredUsers *ignored_users = shmat(shm_id_ignore, NULL, 0);
+    if(ignored_users == (void *)-1){
+        perror("Shared memory attachment error");
+        return -1;
+    }
+
     central_reader = fork();
     if(central_reader < 0){
         perror ("Forking failed");
@@ -125,7 +172,9 @@ int handle_communications(int client_fd){
             // close read end of pipe reader_to_listener
             close(reader_to_listener[i][0]);
         }
-        server_reader(client_fd, reader_to_listener, channel_num, channels);
+        // close read end of pipe reader_to_admin
+        close(reader_to_admin[0]);
+        server_reader(client_fd, reader_to_listener, channel_num, channels, admin_channel_name, reader_to_admin[1], ignored_users);
         exit(0);
     }
 
@@ -155,6 +204,16 @@ int handle_communications(int client_fd){
         exit(0);
     }
 
+    admin = fork();
+    if(admin < 0){
+        perror("Forking failed");
+        return -1;
+    } else if(admin == 0){
+        // close the write end of the reader_to_admin pipe
+        close(reader_to_admin[1]);
+        admin_channel(admin_channel_name, admin_channel_password, reader_to_admin[0], log_message, logger, client_fd, ignored_users);
+        exit(0);
+    }
 
     for(int i = 0; i < channel_num; i++){
         channel_workers[i] = fork();
@@ -174,8 +233,6 @@ int handle_communications(int client_fd){
         }
     }
 
-    fclose(fptr);
-
     sig_action_setup();
 
     waitpid(central_reader, NULL, 0);
@@ -184,12 +241,19 @@ int handle_communications(int client_fd){
 
     waitpid(logger, NULL , 0);
 
+    waitpid(admin, NULL , 0);
+
+    fclose(fptr);
+
     for(int i = 0; i < channel_num; i++){
         waitpid(channel_workers[i], NULL, 0);
     }
 
     shmdt(log_message);
-    shmctl(shm_id, IPC_RMID, NULL);
+    shmctl(shm_id_logging, IPC_RMID, NULL);
+
+    shmdt(ignored_users);
+    shmctl(shm_id_ignore, IPC_RMID, NULL);
 
     dprintf(client_fd, "QUIT");
 
@@ -209,10 +273,13 @@ void server_listener(int client_fd, char channel[], int listener_id, int listene
     struct RequestLLM request;
     request.listener_id = listener_id;
     char message_LLM[2048] = { 0 };
-    dprintf(client_fd, "JOIN %s\r\n", channel);
     sem_t *response_semaphore = sem_open(LLM_SEMAPHORE, 0);
     sem_t *to_server_semaphore = sem_open(WRITE_SERVER, 0);
     sem_t *to_file_semaphore = sem_open(WRITE_FILE, 0);
+
+    sem_wait(to_server_semaphore);
+    dprintf(client_fd, "JOIN %s\r\n", channel);
+    sem_post(to_server_semaphore);
     
 
     while(1){
@@ -247,28 +314,48 @@ void server_listener(int client_fd, char channel[], int listener_id, int listene
     }
 }
 
-void server_reader(int client_fd, int reader_to_listener[][2], int channel_num, char *channels[32]){
+void server_reader(int client_fd, int reader_to_listener[][2], int channel_num, char channels[][64], char admin_channel_name[], int reader_to_admin, struct IgnoredUsers *ignored_users){
     char buffer[1024] = { 0 };
     char target_channel[256] = { 0 };
     sem_t *to_server_semaphore = sem_open(WRITE_SERVER, 0);
+    char admin_channel[256] = { 0 };
+    strcat(admin_channel, "PRIVMSG ");
+    strcat(admin_channel, admin_channel_name);
+    printf("Concatenated channel name %s", admin_channel);
+
     while(1){
         memset(buffer, 0, sizeof(buffer));
         int valread = read(client_fd, buffer, sizeof(buffer) - 1);
         if (valread > 0) {
-            // printf("Read buffer %s\n", buffer);
             if(strstr(buffer, "PING :")){
                 char pong_message[] = "PONG\r\n";
                 sem_wait(to_server_semaphore);
                 send(client_fd, pong_message, strlen(pong_message), 0);
                 sem_post(to_server_semaphore);
             } else {
-                for(int i = 0; i < channel_num; i++){
-                    strcat(target_channel, "PRIVMSG ");
-                    strcat(target_channel, channels[i]);
-                    if(strstr(buffer, target_channel)){
-                        write(reader_to_listener[i][1], buffer, sizeof(buffer));
+                if(strstr(buffer, admin_channel)){
+                    write(reader_to_admin, buffer, sizeof(buffer));
+                } else {
+                    for(int i = 0; i < channel_num; i++){
+                        strcat(target_channel, "PRIVMSG ");
+                        strcat(target_channel, channels[i]);
+                        if(strstr(buffer, target_channel)){
+                            bool match_found = false;
+                            for(int j = 0; j <= ignored_users->count; j++){
+                                char user[20] = { ":" };
+                                strcat(user, ignored_users->user_name[j]);
+                                strcat(user, "!");
+                                if(strstr(buffer, user)){
+                                    match_found = true;
+                                    break;
+                                }
+                            }
+                            if(!match_found){
+                                write(reader_to_listener[i][1], buffer, sizeof(buffer));
+                            }
+                        }
+                        memset(target_channel, 0, sizeof(target_channel));
                     }
-                    memset(target_channel, 0, sizeof(target_channel));
                 }
             }
         }
@@ -311,3 +398,73 @@ void server_logger(FILE *fptr, char *log_message){
 }
 
 void logger_wake_signal(int sig){}
+
+int channel_read(FILE *fptr, char channels[][64]){
+    int i;
+    for(i = 0; i < MAX_CHANNELS; i++){
+        if(fgets(channels[i], 64, fptr) == NULL){
+            break;
+        }
+        for(int j = 0; j < strlen(channels[i]); j++){
+            if(channels[i][j] == '\n'){
+                channels[i][j] = ' ';
+            }
+        }
+    }
+    return i;
+}
+
+void load_admin_config(FILE *fptr, char admin_channel_name[], char admin_channel_password[]){
+    char tmp[256];
+    while(fgets(tmp, 256, fptr) != NULL){
+        tmp[strcspn(tmp, "\n")] = '\0';
+        if(strstr(tmp, "name: ")){
+            strncpy(admin_channel_name, tmp + 6, strcspn(tmp, "\0"));
+        } else if(strstr(tmp, "password: ")){
+            strncpy(admin_channel_password, tmp + 10, strcspn(tmp, "\0"));
+        }
+    }
+}
+
+void admin_channel(char admin_name[], char admin_pass[], int reader_to_admin, char *log_message, pid_t logger_pid, int client_fd, struct IgnoredUsers *ignored_users){
+    char buffer[1024] = { 0 };
+    sem_t *to_file_semaphore = sem_open(WRITE_FILE, 0);
+    sem_t *to_server_semaphore = sem_open(WRITE_SERVER, 0);
+    pid_t parent_pid = getppid();
+
+    sem_wait(to_server_semaphore);
+    dprintf(client_fd, "JOIN %s\r\n", admin_name);
+    sem_post(to_server_semaphore);
+
+    sem_wait(to_server_semaphore);
+    dprintf(client_fd, "MODE %s +k %s\r\n", admin_name, admin_pass);
+    sem_post(to_server_semaphore);
+    
+
+    while(1){
+        if(read(reader_to_admin, buffer, sizeof(buffer) - 1) > 0){
+
+            sem_wait(to_file_semaphore);
+            strcpy(log_message, buffer);
+            kill(logger_pid, SIGALRM);
+            usleep(10000);
+            sem_post(to_file_semaphore);
+
+            get_message(buffer);
+            if(strstr(buffer, "ignore ")){
+                if(ignored_users->count > 9){
+                    sem_wait(to_server_semaphore);
+                    dprintf(client_fd, "PRIVMSG %s :It seems that the maximum number of ignored users has been reached\r\n", admin_name);
+                    sem_post(to_server_semaphore);
+                } else {
+                    buffer[strcspn(buffer, "\r")] = '\0';
+                    int i = ignored_users->count;
+                    strncpy(ignored_users->user_name[i], buffer + 7, strcspn(buffer, "\0"));
+                    ignored_users->count += 1;
+                }
+            } else if(strstr(buffer, "poweroff")){
+                kill(parent_pid, SIGINT);
+            }
+        }
+    }
+}
