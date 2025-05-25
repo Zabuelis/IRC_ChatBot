@@ -32,16 +32,16 @@ int establish_connection(){
             printf("Connection established\n");
             authentication(client_fd);
             printf("Connected to the server\n");
-            if(handle_communications(client_fd) == -1){
-                perror ("Process creation failed");
+            if(handle_communications(client_fd) != -1){
                 break;
             } else {
+                perror("Connection lost... Retrying in 5 seconds...\n");
                 close(client_fd);
-                return 1;
+                sleep(5);
             }
             
         } else {
-            perror("Connection lost... Retrying...\n");
+            perror("Connection failed... Retrying in 5 seconds...\n");
             close(client_fd);
             sleep(5);
         }
