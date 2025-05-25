@@ -24,7 +24,7 @@ void message_compilator(int listener_to_llm, int llm_to_listener[][2]){
     while(1){
             if(read(listener_to_llm, &request, sizeof(request)) > 0){
             format_message(request.prompt);
-            snprintf(prompt_LLM, sizeof(prompt_LLM), "{\"model\": \"llama3.2\", \"prompt\": \"%s\", \"options\": {\"num_predict\": 50}}", request.prompt);
+            snprintf(prompt_LLM, sizeof(prompt_LLM), "{\"model\": \"%s\", \"prompt\": \"%s\", \"options\": {\"num_predict\": 50}}",LLM_MODEL, request.prompt);
             curl_LLM(prompt_LLM);
             get_LLM_message(message_LLM);
             format_message(message_LLM);
@@ -45,7 +45,7 @@ void curl_LLM(char prompt_LLM[]){
 
   hnd = curl_easy_init();
   curl_easy_setopt(hnd, CURLOPT_BUFFERSIZE, 102400L);
-  curl_easy_setopt(hnd, CURLOPT_URL, "http://localhost:11434/api/generate");
+  curl_easy_setopt(hnd, CURLOPT_URL, LLM_URL);
   curl_easy_setopt(hnd, CURLOPT_POSTFIELDS, prompt_LLM);
   curl_easy_setopt(hnd, CURLOPT_USERAGENT, "curl/7.88.1");
   curl_easy_setopt(hnd, CURLOPT_MAXREDIRS, 50L);

@@ -4,10 +4,17 @@
 #include <unistd.h>
 #include <netdb.h>
 #include <sys/socket.h>
+#include <signal.h>
 #include <connection_handler.h>
 #include <communication_handler.h>
 
+int i = 5;
+
 void authentication(int client_fd);
+void catch_signal(int sig_num){
+    printf("Exit signal caught\n");
+    i = 0;
+}
 
 int establish_connection(){
     int status, client_fd;
@@ -16,7 +23,6 @@ int establish_connection(){
     serv_addr.sin_family = AF_INET;
     serv_addr.sin_port = htons(PORT);
 
-    int i = 5;
     int timer = 5;
 
     while(i > 0){
@@ -35,9 +41,11 @@ int establish_connection(){
             printf("Connection established\n");
             authentication(client_fd);
             printf("Connected to the server\n");
+            signal(SIGINT, SIG_DFL);
             if(handle_communications(client_fd) != -1){
                 break;
             } else {
+                signal(SIGINT, catch_signal);
                 printf("Connection lost... Retrying in %i seconds...\n", timer);
                 close(client_fd);
                 i--;
@@ -47,6 +55,7 @@ int establish_connection(){
             }
             
         } else {
+            signal(SIGINT, catch_signal);
             printf("Connection refused... Retrying in %i seconds...\n", timer);
             i--;
             printf("Attempts left: %i \n", i);
