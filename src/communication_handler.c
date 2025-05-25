@@ -268,11 +268,11 @@ int handle_communications(int client_fd){
 
     waitpid(admin, NULL , 0);
 
-    fclose(fptr);
-
     for(int i = 0; i < channel_num; i++){
         waitpid(channel_workers[i], NULL, 0);
     }
+
+    fclose(fptr);
 
     shmdt(log_message);
     shmctl(shm_id_logging, IPC_RMID, NULL);
@@ -395,6 +395,7 @@ void server_reader(int client_fd, int reader_to_listener[][2], int channel_num, 
         } else if(valread == 0 || (valread == -1 && errno != EWOULDBLOCK && errno != EAGAIN)){
             *is_socket_alive = false;
             kill(parent_pid, SIGINT);
+            break;
         }
     }
 }

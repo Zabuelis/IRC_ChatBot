@@ -16,7 +16,10 @@ int establish_connection(){
     serv_addr.sin_family = AF_INET;
     serv_addr.sin_port = htons(PORT);
 
-    while(1){
+    int i = 5;
+    int timer = 5;
+
+    while(i > 0){
         if((client_fd = socket(AF_INET, SOCK_STREAM, 0)) < 0){
             perror("\n Socket creation error \n");
             return -1;
@@ -35,15 +38,21 @@ int establish_connection(){
             if(handle_communications(client_fd) != -1){
                 break;
             } else {
-                perror("Connection lost... Retrying in 5 seconds...\n");
+                printf("Connection lost... Retrying in %i seconds...\n", timer);
                 close(client_fd);
-                sleep(5);
+                i--;
+                printf("Attempts left: %i \n", i);
+                sleep(timer);
+                timer += 20;
             }
             
         } else {
-            perror("Connection failed... Retrying in 5 seconds...\n");
+            printf("Connection refused... Retrying in %i seconds...\n", timer);
+            i--;
+            printf("Attempts left: %i \n", i);
             close(client_fd);
-            sleep(5);
+            sleep(timer);
+            timer += 20;
         }
     }
     printf("Shutting down... ");
