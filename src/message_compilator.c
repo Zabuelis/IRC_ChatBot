@@ -24,7 +24,7 @@ void message_compilator(int listener_to_llm, int llm_to_listener[][2]){
     while(1){
             if(read(listener_to_llm, &request, sizeof(request)) > 0){
             format_message(request.prompt);
-            snprintf(prompt_LLM, sizeof(prompt_LLM), "{\"model\": \"%s\", \"prompt\": \"%s\", \"options\": {\"num_predict\": 50}}",LLM_MODEL, request.prompt);
+            snprintf(prompt_LLM, sizeof(prompt_LLM), "{\"model\": \"%s\", \"prompt\": \"%s\", \"options\": {\"num_predict\": %i}}",LLM_MODEL, request.prompt, TOKEN_SIZE);
             curl_LLM(prompt_LLM);
             get_LLM_message(message_LLM);
             format_message(message_LLM);

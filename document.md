@@ -1,5 +1,9 @@
 # ChatBot for an IRC Server
 
+## Requirements
+- 10 gb of RAM if the LLM is going to be hosted locally.
+- If LLM will be curled from some other host, the requirements are very minimal.
+
 ## Features 
 - Uses Ollama to generate responses.
 - Uses UNIX internals for smooth operation
@@ -49,7 +53,7 @@
 ### Include
 - Stores C header files and additional information.
 - connection_handler.h stores server ip address, server port and user name for the bot to use.
-- message_compilator.h stores OLLAMA model that will be using in the program and a url to generate responses from.
+- message_compilator.h stores OLLAMA model that will be using in the program and a url to generate responses from. It also stores the length of allowed token for OLLAMA generation, currently set to 30 to speed up response generation process.
 
 ### Logs
 - Stores chat.log file. All logging is placed there.
@@ -65,3 +69,5 @@ These commands can be executed in the admin channel.
 - ignore user0000. Up to 10 users if this limit is exceeded the chat bot will send a notification. Example ignore kaza5555. Currently user name is expected to not be longer than 9 symbols.
 - poweroff - send a command to shutdown the bot without leaving the irc channel.
 - More will be added...
+
+## Makefile
