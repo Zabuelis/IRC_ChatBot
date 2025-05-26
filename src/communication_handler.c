@@ -39,6 +39,11 @@ struct IgnoredUsers {
     char user_name[10][10];
 };
 
+struct MutedChannels {
+    int count;
+    char chan_name[32][64];
+};
+
 void handle_exit(){
     if(*is_socket_alive){
         printf("Performing graceful exit... Please wait...\n");
@@ -61,12 +66,12 @@ void sig_action_setup(){
     sigaction(SIGINT, &sa, NULL);
 }
 
-void server_reader(int client_fd, int reader_to_listener[][2], int channel_num, char channels[][64], char admin_channel_name[], int reader_to_admin, struct IgnoredUsers *ignored_users, bool *is_socket_alive);
+void server_reader(int client_fd, int reader_to_listener[][2], int channel_num, char channels[][64], char admin_channel_name[], int reader_to_admin, struct IgnoredUsers *ignored_users, bool *is_socket_alive, struct MutedChannels *muted_channels);
 void get_message(char buffer[]);
 void server_listener(int client_fd, char channel[], int listener_id, int listener_to_llm, int llm_to_listener, int reader_to_listener, pid_t logger_pid, char *log_message);
 void server_logger(FILE *fptr, char *log_message);
 void logger_wake_signal(int sig);
-void admin_channel(char admin_name[], char admin_pass[], int reader_to_admin, char *log_message, pid_t logger_pid, int client_fd, struct IgnoredUsers *ignored_users);
+void admin_channel(char admin_name[], char admin_pass[], int reader_to_admin, char *log_message, pid_t logger_pid, int client_fd, struct IgnoredUsers *ignored_users, struct MutedChannels *muted_channels);
 int channel_read(FILE *fptr, char channels[][64]);
 void load_admin_config(FILE *fptr, char admin_channel_name[], char admin_channel_password[]);
 
@@ -188,6 +193,18 @@ int handle_communications(int client_fd){
 
     *is_socket_alive = true;
 
+    int shm_id_muted_channels = shmget(1111, sizeof(struct MutedChannels), 0666 | IPC_CREAT);
+    if(shm_id_muted_channels == -1){
+        perror("Shared memory error");
+        return -2;
+    }
+    
+    struct MutedChannels *muted_channels = shmat(shm_id_muted_channels, NULL, 0);
+    if(muted_channels == (void *)-1){
+        perror("Shared memory error");
+        return -2;
+    }
+
     central_reader = fork();
     if(central_reader < 0){
         perror ("Forking failed");
@@ -199,7 +216,7 @@ int handle_communications(int client_fd){
         }
         // close read end of pipe reader_to_admin
         close(reader_to_admin[0]);
-        server_reader(client_fd, reader_to_listener, channel_num, channels, admin_channel_name, reader_to_admin[1], ignored_users, is_socket_alive);
+        server_reader(client_fd, reader_to_listener, channel_num, channels, admin_channel_name, reader_to_admin[1], ignored_users, is_socket_alive, muted_channels);
         exit(0);
     }
 
@@ -236,7 +253,7 @@ int handle_communications(int client_fd){
     } else if(admin == 0){
         // close the write end of the reader_to_admin pipe
         close(reader_to_admin[1]);
-        admin_channel(admin_channel_name, admin_channel_password, reader_to_admin[0], log_message, logger, client_fd, ignored_users);
+        admin_channel(admin_channel_name, admin_channel_password, reader_to_admin[0], log_message, logger, client_fd, ignored_users, muted_channels);
         exit(0);
     }
 
@@ -279,6 +296,9 @@ int handle_communications(int client_fd){
 
     shmdt(ignored_users);
     shmctl(shm_id_ignore, IPC_RMID, NULL);
+
+    shmdt(muted_channels);
+    shmctl(shm_id_muted_channels, IPC_RMID, NULL);
 
     dprintf(client_fd, "QUIT");
 
@@ -347,7 +367,7 @@ void server_listener(int client_fd, char channel[], int listener_id, int listene
     }
 }
 
-void server_reader(int client_fd, int reader_to_listener[][2], int channel_num, char channels[][64], char admin_channel_name[], int reader_to_admin, struct IgnoredUsers *ignored_users, bool *is_socket_alive){
+void server_reader(int client_fd, int reader_to_listener[][2], int channel_num, char channels[][64], char admin_channel_name[], int reader_to_admin, struct IgnoredUsers *ignored_users, bool *is_socket_alive, struct MutedChannels *muted_channels){
     char buffer[1024] = { 0 };
     char target_channel[256] = { 0 };
     sem_t *to_server_semaphore = sem_open(WRITE_SERVER, 0);
@@ -355,7 +375,6 @@ void server_reader(int client_fd, int reader_to_listener[][2], int channel_num, 
     pid_t parent_pid = getppid();
     strcat(admin_channel, "PRIVMSG ");
     strcat(admin_channel, admin_channel_name);
-    printf("Concatenated channel name %s", admin_channel);
 
     while(1){
         memset(buffer, 0, sizeof(buffer));
@@ -374,17 +393,28 @@ void server_reader(int client_fd, int reader_to_listener[][2], int channel_num, 
                         strcat(target_channel, "PRIVMSG ");
                         strcat(target_channel, channels[i]);
                         if(strstr(buffer, target_channel)){
-                            bool match_found = false;
-                            for(int j = 0; j <= ignored_users->count; j++){
-                                char user[20] = { ":" };
-                                strcat(user, ignored_users->user_name[j]);
-                                strcat(user, "!");
-                                if(strstr(buffer, user)){
-                                    match_found = true;
+                            bool match_user_found = false;
+                            bool match_channel_found = false;
+                            for(int j = 0; j < muted_channels->count; j++){
+                                char channel[256] = {"PRIVMSG "};
+                                strcat(channel, muted_channels->chan_name[j]);
+                                if(strcmp(channel, target_channel) == 0){
+                                    match_channel_found = true;
                                     break;
                                 }
                             }
-                            if(!match_found){
+                            if(!match_channel_found){
+                                for(int j = 0; j < ignored_users->count; j++){
+                                    char user[20] = { ":" };
+                                    strcat(user, ignored_users->user_name[j]);
+                                    strcat(user, "!");
+                                    if(strstr(buffer, user)){
+                                        match_user_found = true;
+                                        break;
+                                    }
+                                }
+                            }
+                            if(!match_user_found && !match_channel_found){
                                 write(reader_to_listener[i][1], buffer, sizeof(buffer));
                             }
                         }
@@ -464,7 +494,7 @@ void load_admin_config(FILE *fptr, char admin_channel_name[], char admin_channel
     }
 }
 
-void admin_channel(char admin_name[], char admin_pass[], int reader_to_admin, char *log_message, pid_t logger_pid, int client_fd, struct IgnoredUsers *ignored_users){
+void admin_channel(char admin_name[], char admin_pass[], int reader_to_admin, char *log_message, pid_t logger_pid, int client_fd, struct IgnoredUsers *ignored_users, struct MutedChannels *muted_channels){
     char buffer[1024] = { 0 };
     sem_t *to_file_semaphore = sem_open(WRITE_FILE, 0);
     sem_t *to_server_semaphore = sem_open(WRITE_SERVER, 0);
@@ -498,10 +528,27 @@ void admin_channel(char admin_name[], char admin_pass[], int reader_to_admin, ch
                     buffer[strcspn(buffer, "\r")] = '\0';
                     int i = ignored_users->count;
                     strncpy(ignored_users->user_name[i], buffer + 7, strcspn(buffer, "\0"));
+                    sem_wait(to_server_semaphore);
+                    dprintf(client_fd, "PRIVMSG %s :User %s will now be ignored\r\n", admin_name, ignored_users->user_name[i]);
+                    sem_post(to_server_semaphore);
                     ignored_users->count += 1;
                 }
             } else if(strstr(buffer, "poweroff")){
                 kill(parent_pid, SIGINT);
+            } else if(strstr(buffer, "donotchat ")){
+                if(muted_channels->count > 31){
+                    sem_wait(to_server_semaphore);
+                    dprintf(client_fd, "PRIVMSG %s :It seems that the maximum number of muted channels has been reached\r\n", admin_name);
+                    sem_post(to_server_semaphore);
+                } else {
+                    buffer[strcspn(buffer, "\r")] = '\0';
+                    int i = muted_channels->count;
+                    strncpy(muted_channels->chan_name[i], buffer + 10, strcspn(buffer, "\0"));
+                    sem_wait(to_server_semaphore);
+                    dprintf(client_fd, "PRIVMSG %s :Channel %s will now be ignored\r\n", admin_name, muted_channels->chan_name[i]);
+                    sem_post(to_server_semaphore);
+                    muted_channels->count += 1;
+                }
             }
         }
     }

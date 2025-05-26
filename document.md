@@ -3,6 +3,8 @@
 ## Requirements
 - 10 gb of RAM if the LLM is going to be hosted locally.
 - If LLM will be curled from some other host, the requirements are very minimal.
+- libcurl4 C library.
+- libcjson C library.
 
 ## Features 
 - Uses Ollama to generate responses.
@@ -12,6 +14,13 @@
 - Admin channel and admin commands.
 - Ability to mute users (only allowed for admin user).
 - Ability to shutdown the program, without leaving the IRC server (only allowed for admin user).
+
+## Missing Features
+- Narrative for LLM is not stored.
+- Specific topics for LLM are not present.
+
+## Program Workflow
+When the program is launched it first checks whether all required configuration files are present. After file validation the program tries to connect to a specified server through socket connection. If connection fails or is disrupted, at any time of the program execution, the program will attempt to reconnect to it 5 times with each time increased waiting timer. After establishing connection the program loads up required config files, creates semaphores, allocates shared memory, creates pipes and signal handling. After creating UNIX internals the program starts to fork. Each defined server in the config file channels.cfg gets its own "server listener" process, it handles writing to the joined channel. One "server reader" process is created which reads the socket input from the server and sends out the read buffer to "channel listener" processes. One process for response generation is created (uses OLLAMA), this process receives data from "channel listener" processes and returns generated LLM response. One process is created for admin channel, it handles defined admin commands, channel specifications are stored in admin.cfg file. Lastly one process for logging is created, it stores received data from the server and sent data from the chat bot in a file which can be found inside logs/chat.log. If a signal for shutting down is received, the program kills all of the forked processes, frees allocated resources, closes file descryptors and shuts down. 
 
 ## UNIX Internals
 
@@ -68,6 +77,7 @@
 These commands can be executed in the admin channel.
 - ignore user0000. Up to 10 users if this limit is exceeded the chat bot will send a notification. Example ignore kaza5555. Currently user name is expected to not be longer than 9 symbols.
 - poweroff - send a command to shutdown the bot without leaving the irc channel.
+- donotchat #Unix - adds a channel to muted channel list, where the bot will not interact with anyone. Up to 32 channels.
 - More will be added...
 
 ## Makefile
