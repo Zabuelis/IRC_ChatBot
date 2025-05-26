@@ -475,7 +475,7 @@ int channel_read(FILE *fptr, char channels[][64]){
         }
         for(int j = 0; j < strlen(channels[i]); j++){
             if(channels[i][j] == '\n'){
-                channels[i][j] = ' ';
+                channels[i][j] = '\0';
             }
         }
     }
