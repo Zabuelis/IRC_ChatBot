@@ -19,8 +19,20 @@
 - Narrative for LLM is not stored.
 - Specific topics for LLM are not present.
 
+## Makefile
+- Makefile is used to install required libraries with with Ollama if it is chosen to do so.
+- Makefile has several functions. make install-libraries installs required libraries for compilation without ollama. make install-libraries-and-llama installs required libraries and ollama with llama 3.2 model. Please note that both of these functions should be executed with sudo permissions.
+- After executing one of the previously mentioned functions, user should run make. After this command executes the user will have an executable file called client.
+
 ## Program Workflow
 When the program is launched it first checks whether all required configuration files are present. After file validation the program tries to connect to a specified server through socket connection. If connection fails or is disrupted, at any time of the program execution, the program will attempt to reconnect to it 5 times with each time increased waiting timer. After establishing connection the program loads up required config files, creates semaphores, allocates shared memory, creates pipes and signal handling. After creating UNIX internals the program starts to fork. Each defined server in the config file channels.cfg gets its own "server listener" process, it handles writing to the joined channel. One "server reader" process is created which reads the socket input from the server and sends out the read buffer to "channel listener" processes. One process for response generation is created (uses OLLAMA), this process receives data from "channel listener" processes and returns generated LLM response. One process is created for admin channel, it handles defined admin commands, channel specifications are stored in admin.cfg file. Lastly one process for logging is created, it stores received data from the server and sent data from the chat bot in a file which can be found inside logs/chat.log. If a signal for shutting down is received, the program kills all of the forked processes, frees allocated resources, closes file descryptors and shuts down. 
+
+## Custom commands
+These commands can be executed in the admin channel.
+- ignore user0000. Up to 10 users if this limit is exceeded the chat bot will send a notification. Example ignore kaza5555. Currently user name is expected to not be longer than 9 symbols.
+- poweroff - send a command to shutdown the bot without leaving the irc channel.
+- donotchat #Unix - adds a channel to muted channel list, where the bot will not interact with anyone. Up to 32 channels, channel name is expected to be no longer thab 63 symbols.
+- More will be added...
 
 ## UNIX Internals
 
@@ -47,10 +59,11 @@ When the program is launched it first checks whether all required configuration 
 ### Shared Memory
 - Shared memory is used in several cases. One of them is to monitor if a socket is still alive. If at some point socket breaks bool flag is changed to false. This way the program knows whether this was an intended disconnect or a forced socket disconnection.
 - Another use case is to store muted users. Admin channel collects muted users and then later on server reader process can ignore messages sent from those users.
-- Shared memory is also used for logging messages. Channel monitor processes write into a shared memory buffer, once that buffer is written semaphore is turned on and is not turned off until the message is written into the file. 
+- Shared memory is also used for logging messages. Channel monitor processes write into a shared memory buffer, once that buffer is written semaphore is turned on and is not turned off until the message is written into the file.
+- Shared memory also stores muted channels. An admin can create a new rule to ignore all input in a certain channel by sending a command in admin channel. All chatting will be ignored in specified channel. 
 
 ### Signals
-- Signals are used to gracefully close the program when a CTRL + Z or a SIGINT signal is received. This approach is used twice, once to stop currently running processes and gracefully exit the program, another time is to gracefully shutdown the program when it is trying to reconnect a socket.
+- Signals are used to gracefully close the program when a CTRL + C or a SIGINT signal is received. This approach is used twice, once to stop currently running processes and gracefully exit the program, another time is to gracefully shutdown the program when it is trying to reconnect a socket.
 - Signals are also used to wake up logger process when new data in shared memory buffer is available.
 
 ## File Structure
@@ -71,13 +84,6 @@ When the program is launched it first checks whether all required configuration 
 - Used for generating OLLAMA responses.
 
 ### Src
-- C source files
+- C source files.
 
-## Custom commands
-These commands can be executed in the admin channel.
-- ignore user0000. Up to 10 users if this limit is exceeded the chat bot will send a notification. Example ignore kaza5555. Currently user name is expected to not be longer than 9 symbols.
-- poweroff - send a command to shutdown the bot without leaving the irc channel.
-- donotchat #Unix - adds a channel to muted channel list, where the bot will not interact with anyone. Up to 32 channels.
-- More will be added...
 
-## Makefile
