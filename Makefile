@@ -36,4 +36,7 @@ install-libraries-and-llama:
 	apt update
 	apt install libcurl4-openssl-dev libcjson-dev build-essential curl -y
 	curl -fsSL https://ollama.com/install.sh | sh
-	ollama run llama3.2
+	until curl -s http://localhost:11434 | grep "Ollama is running" ; do \
+		sleep 1; \
+	done
+	ollama run llama3.2 &
