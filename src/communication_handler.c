@@ -66,7 +66,7 @@ void sig_action_setup(){
     sigaction(SIGINT, &sa, NULL);
 }
 
-void server_reader(int client_fd, int reader_to_listener[][2], int channel_num, char channels[][64], char admin_channel_name[], int reader_to_admin, struct IgnoredUsers *ignored_users, bool *is_socket_alive, struct MutedChannels *muted_channels);
+void server_reader(int client_fd, int reader_to_listener[][2], int channel_num, char channels[][64], char admin_channel_name[], int reader_to_admin, struct IgnoredUsers *ignored_users, bool *is_socket_alive, struct MutedChannels *muted_channels, char *log_message, pid_t logger_pid);
 void get_message(char buffer[]);
 void server_listener(int client_fd, char channel[], int listener_id, int listener_to_llm, int llm_to_listener, int reader_to_listener, pid_t logger_pid, char *log_message);
 void server_logger(FILE *fptr, char *log_message);
@@ -74,6 +74,7 @@ void logger_wake_signal(int sig);
 void admin_channel(char admin_name[], char admin_pass[], int reader_to_admin, char *log_message, pid_t logger_pid, int client_fd, struct IgnoredUsers *ignored_users, struct MutedChannels *muted_channels, struct Topics *topics);
 int channel_read(FILE *fptr, char channels[][64]);
 void load_admin_config(FILE *fptr, char admin_channel_name[], char admin_channel_password[]);
+void message_log(sem_t *to_file_semaphore, char message[], char *log_message, pid_t logger_pid);
 
 int handle_communications(int client_fd){
     sem_t *response_semaphore;
@@ -233,21 +234,6 @@ int handle_communications(int client_fd){
     strncpy(topics->selected_topic[0], "Topic:Unix", 64);
     strncpy(topics->selected_topic[1], "Topic:Cooking", 64);
 
-    central_reader = fork();
-    if(central_reader < 0){
-        perror ("Forking failed");
-        return -2;
-    } else if(central_reader == 0){
-        for(int i = 0; i < channel_num; i++){
-            // Close read end of pipe reader_to_listener
-            close(reader_to_listener[i][0]);
-        }
-        // Close read end of pipe reader_to_admin
-        close(reader_to_admin[0]);
-        server_reader(client_fd, reader_to_listener, channel_num, channels, admin_channel_name, reader_to_admin[1], ignored_users, is_socket_alive, muted_channels);
-        exit(0);
-    }
-
     response_generator = fork();
     if(response_generator < 0){
         perror ("Forking failed");
@@ -271,6 +257,21 @@ int handle_communications(int client_fd){
         return -2;
     } else if (logger == 0){
         server_logger(fptr, log_message);
+        exit(0);
+    }
+
+    central_reader = fork();
+    if(central_reader < 0){
+        perror ("Forking failed");
+        return -2;
+    } else if(central_reader == 0){
+        for(int i = 0; i < channel_num; i++){
+            // Close read end of pipe reader_to_listener
+            close(reader_to_listener[i][0]);
+        }
+        // Close read end of pipe reader_to_admin
+        close(reader_to_admin[0]);
+        server_reader(client_fd, reader_to_listener, channel_num, channels, admin_channel_name, reader_to_admin[1], ignored_users, is_socket_alive, muted_channels, log_message, logger);
         exit(0);
     }
 
@@ -304,11 +305,11 @@ int handle_communications(int client_fd){
 
     sig_action_setup();
 
-    waitpid(central_reader, NULL, 0);
-
     waitpid(response_generator, NULL, 0);
 
     waitpid(logger, NULL , 0);
+
+    waitpid(central_reader, NULL, 0);
 
     waitpid(admin, NULL , 0);
 
@@ -369,11 +370,7 @@ void server_listener(int client_fd, char channel[], int listener_id, int listene
     while(1){
         if(read(reader_to_listener, request.prompt, sizeof(request.prompt)) > 0){
 
-            sem_wait(to_file_semaphore);
-            strcpy(log_message, request.prompt);
-            kill(logger_pid, SIGALRM);
-            usleep(10000);
-            sem_post(to_file_semaphore);
+            message_log(to_file_semaphore, request.prompt, log_message, logger_pid);
 
             get_message(request.prompt);
             sem_wait(response_semaphore);
@@ -385,12 +382,9 @@ void server_listener(int client_fd, char channel[], int listener_id, int listene
             dprintf(client_fd, "PRIVMSG %s :%s\r\n", channel, message_LLM);
             sem_post(to_server_semaphore);
 
-            sem_wait(to_file_semaphore);
+            
             strcat(message_LLM, channel);
-            strcpy(log_message, message_LLM);
-            kill(logger_pid, SIGALRM);
-            usleep(10000);
-            sem_post(to_file_semaphore);
+            message_log(to_file_semaphore, message_LLM, log_message, logger_pid);
 
             memset(message_LLM, 0, sizeof(message_LLM));
             memset(request.prompt, 0, sizeof(request.prompt));
@@ -399,10 +393,11 @@ void server_listener(int client_fd, char channel[], int listener_id, int listene
 }
 
 // Function used by a process that monitors all data received from the server
-void server_reader(int client_fd, int reader_to_listener[][2], int channel_num, char channels[][64], char admin_channel_name[], int reader_to_admin, struct IgnoredUsers *ignored_users, bool *is_socket_alive, struct MutedChannels *muted_channels){
+void server_reader(int client_fd, int reader_to_listener[][2], int channel_num, char channels[][64], char admin_channel_name[], int reader_to_admin, struct IgnoredUsers *ignored_users, bool *is_socket_alive, struct MutedChannels *muted_channels, char *log_message, pid_t logger_pid){
     char buffer[1024] = { 0 };
     char target_channel[256] = { 0 };
     sem_t *to_server_semaphore = sem_open(WRITE_SERVER, 0);
+    sem_t *to_file_semaphore = sem_open(WRITE_FILE, 0);
     char admin_channel[256] = { 0 };
     pid_t parent_pid = getppid();
     strcat(admin_channel, "PRIVMSG ");
@@ -413,10 +408,12 @@ void server_reader(int client_fd, int reader_to_listener[][2], int channel_num, 
         int valread = read(client_fd, buffer, sizeof(buffer) - 1);
         if (valread > 0) {
             if(strstr(buffer, "PING :")){
+                message_log(to_file_semaphore, buffer, log_message, logger_pid);
                 char pong_message[] = "PONG\r\n";
                 sem_wait(to_server_semaphore);
                 send(client_fd, pong_message, strlen(pong_message), 0);
                 sem_post(to_server_semaphore);
+                message_log(to_file_semaphore, pong_message, log_message, logger_pid);
             } else {
                 if(strstr(buffer, admin_channel)){
                     write(reader_to_admin, buffer, sizeof(buffer));
@@ -493,7 +490,6 @@ void server_logger(FILE *fptr, char *log_message){
             fprintf(fptr, "%s\n", log_message);
             fflush(fptr);
             memset(log_message, 0, 2048);
-            *log_message = '\0';
         }
     }
 }
@@ -546,11 +542,7 @@ void admin_channel(char admin_name[], char admin_pass[], int reader_to_admin, ch
     while(1){
         if(read(reader_to_admin, buffer, sizeof(buffer) - 1) > 0){
 
-            sem_wait(to_file_semaphore);
-            strcpy(log_message, buffer);
-            kill(logger_pid, SIGALRM);
-            usleep(10000);
-            sem_post(to_file_semaphore);
+            message_log(to_file_semaphore, buffer, log_message, logger_pid);
 
             get_message(buffer);
             if(strstr(buffer, "ignore ")){
@@ -609,4 +601,14 @@ void admin_channel(char admin_name[], char admin_pass[], int reader_to_admin, ch
             }
         }
     }
+}
+
+void message_log(sem_t *to_file_semaphore, char message[], char *log_message, pid_t logger_pid){
+    sem_wait(to_file_semaphore);
+    strcpy(log_message, message);
+    kill(logger_pid, SIGALRM);
+    while(strlen(log_message) != 0){
+        usleep(10000);
+    }
+    sem_post(to_file_semaphore);
 }
