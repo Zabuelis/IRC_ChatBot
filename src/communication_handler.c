@@ -50,9 +50,9 @@ void handle_exit(){
     } else {
         printf("It appears that socket has disconnected... Please wait...\n");
     }
-    kill(central_reader, SIGINT);
     kill(response_generator, SIGINT);
     kill(logger, SIGINT);
+    kill(central_reader, SIGINT);
     kill(admin, SIGINT);
     for(int i = 0; i < channel_num; i++){
         kill(channel_workers[i], SIGINT);
@@ -369,9 +369,6 @@ void server_listener(int client_fd, char channel[], int listener_id, int listene
 
     while(1){
         if(read(reader_to_listener, request.prompt, sizeof(request.prompt)) > 0){
-
-            message_log(to_file_semaphore, request.prompt, log_message, logger_pid);
-
             get_message(request.prompt);
             sem_wait(response_semaphore);
             write(listener_to_llm, &request, sizeof(request));
@@ -407,8 +404,8 @@ void server_reader(int client_fd, int reader_to_listener[][2], int channel_num, 
         memset(buffer, 0, sizeof(buffer));
         int valread = read(client_fd, buffer, sizeof(buffer) - 1);
         if (valread > 0) {
+            message_log(to_file_semaphore, buffer, log_message, logger_pid);
             if(strstr(buffer, "PING :")){
-                message_log(to_file_semaphore, buffer, log_message, logger_pid);
                 char pong_message[] = "PONG\r\n";
                 sem_wait(to_server_semaphore);
                 send(client_fd, pong_message, strlen(pong_message), 0);
