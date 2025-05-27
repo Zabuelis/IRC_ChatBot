@@ -71,7 +71,7 @@ void get_message(char buffer[]);
 void server_listener(int client_fd, char channel[], int listener_id, int listener_to_llm, int llm_to_listener, int reader_to_listener, pid_t logger_pid, char *log_message);
 void server_logger(FILE *fptr, char *log_message);
 void logger_wake_signal(int sig);
-void admin_channel(char admin_name[], char admin_pass[], int reader_to_admin, char *log_message, pid_t logger_pid, int client_fd, struct IgnoredUsers *ignored_users, struct MutedChannels *muted_channels);
+void admin_channel(char admin_name[], char admin_pass[], int reader_to_admin, char *log_message, pid_t logger_pid, int client_fd, struct IgnoredUsers *ignored_users, struct MutedChannels *muted_channels, struct Topics *topics);
 int channel_read(FILE *fptr, char channels[][64]);
 void load_admin_config(FILE *fptr, char admin_channel_name[], char admin_channel_password[]);
 
@@ -216,6 +216,23 @@ int handle_communications(int client_fd){
         return -2;
     }
 
+    // Allocating shared memory for topic selection
+    int shm_id_topics = shmget(4444, sizeof(struct Topics), 0666 | IPC_CREAT);
+    if(shm_id_topics == -1){
+        perror("Shared memory error");
+        return -2;
+    }
+
+    struct Topics *topics = shmat(shm_id_topics, NULL, 0);
+    if(topics == (void *)-1){
+        perror("Shared memory error");
+        return -2;
+    }
+
+    topics->topic_num = 0;
+    strncpy(topics->selected_topic[0], "Topic:Unix", 64);
+    strncpy(topics->selected_topic[1], "Topic:Cooking", 64);
+
     central_reader = fork();
     if(central_reader < 0){
         perror ("Forking failed");
@@ -242,7 +259,7 @@ int handle_communications(int client_fd){
         }
         // Close write side of pipe listener_to_llm
         close(listener_to_llm[1]);
-        message_compilator(listener_to_llm[0], llm_to_listener);
+        message_compilator(listener_to_llm[0], llm_to_listener, topics);
         exit(0);
     }
 
@@ -264,7 +281,7 @@ int handle_communications(int client_fd){
     } else if(admin == 0){
         // Close the write end of the reader_to_admin pipe
         close(reader_to_admin[1]);
-        admin_channel(admin_channel_name, admin_channel_password, reader_to_admin[0], log_message, logger, client_fd, ignored_users, muted_channels);
+        admin_channel(admin_channel_name, admin_channel_password, reader_to_admin[0], log_message, logger, client_fd, ignored_users, muted_channels, topics);
         exit(0);
     }
 
@@ -309,6 +326,9 @@ int handle_communications(int client_fd){
 
     shmdt(muted_channels);
     shmctl(shm_id_muted_channels, IPC_RMID, NULL);
+
+    shmdt(topics);
+    shmctl(shm_id_topics, IPC_RMID, NULL);
 
     dprintf(client_fd, "QUIT");
 
@@ -508,7 +528,7 @@ void load_admin_config(FILE *fptr, char admin_channel_name[], char admin_channel
 }
 
 // Function used by a process that handles admin channel
-void admin_channel(char admin_name[], char admin_pass[], int reader_to_admin, char *log_message, pid_t logger_pid, int client_fd, struct IgnoredUsers *ignored_users, struct MutedChannels *muted_channels){
+void admin_channel(char admin_name[], char admin_pass[], int reader_to_admin, char *log_message, pid_t logger_pid, int client_fd, struct IgnoredUsers *ignored_users, struct MutedChannels *muted_channels, struct Topics *topics){
     char buffer[1024] = { 0 };
     sem_t *to_file_semaphore = sem_open(WRITE_FILE, 0);
     sem_t *to_server_semaphore = sem_open(WRITE_SERVER, 0);
@@ -562,6 +582,29 @@ void admin_channel(char admin_name[], char admin_pass[], int reader_to_admin, ch
                     dprintf(client_fd, "PRIVMSG %s :Channel %s will now be ignored\r\n", admin_name, muted_channels->chan_name[i]);
                     sem_post(to_server_semaphore);
                     muted_channels->count += 1;
+                }
+            } else if(strstr(buffer, "topic ")){
+                char tmp;
+                tmp = buffer[6];
+                if(tmp == '0'){
+                    topics->topic_num = 0;
+                    sem_wait(to_server_semaphore);
+                    dprintf(client_fd, "PRIVMSG %s :No topic will be used now\r\n", admin_name);
+                    sem_post(to_server_semaphore);
+                } else if(tmp == '1'){
+                    topics->topic_num = 1;
+                    sem_wait(to_server_semaphore);
+                    dprintf(client_fd, "PRIVMSG %s :Topic: %s will be used now\r\n", admin_name, topics->selected_topic[topics->topic_num - 1]);
+                    sem_post(to_server_semaphore);
+                } else if(tmp == '2'){
+                    topics->topic_num = 2;
+                    sem_wait(to_server_semaphore);
+                    dprintf(client_fd, "PRIVMSG %s :Topic: %s will be used now\r\n", admin_name, topics->selected_topic[topics->topic_num - 1]);
+                    sem_post(to_server_semaphore);
+                } else {
+                    sem_wait(to_server_semaphore);
+                    dprintf(client_fd, "PRIVMSG %s :Topic choice is invalid\r\n", admin_name);
+                    sem_post(to_server_semaphore);
                 }
             }
         }

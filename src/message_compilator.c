@@ -18,7 +18,7 @@ void curl_LLM(char prompt_LLM[]);
 void get_LLM_message(char message_LLM[]);
 
 // Function used by a process that generates responses
-void message_compilator(int listener_to_llm, int llm_to_listener[][2]){
+void message_compilator(int listener_to_llm, int llm_to_listener[][2], struct Topics *topics){
     struct RequestLLM request;
     char prompt_LLM[1024] = { 0 };
     char message_LLM[2048] = { 0 };
@@ -26,7 +26,11 @@ void message_compilator(int listener_to_llm, int llm_to_listener[][2]){
     while(1){
             if(read(listener_to_llm, &request, sizeof(request)) > 0){
             format_message(request.prompt);
-            snprintf(prompt_LLM, sizeof(prompt_LLM), "{\"model\": \"%s\", \"prompt\": \"%s\", \"options\": {\"num_predict\": %i}}",LLM_MODEL, request.prompt, TOKEN_SIZE);
+            if(topics->topic_num != 0){
+                snprintf(prompt_LLM, sizeof(prompt_LLM), "{\"model\": \"%s\", \"prompt\": \"%s %s\", \"options\": {\"num_predict\": %i}}",LLM_MODEL, request.prompt, topics->selected_topic[topics->topic_num - 1], TOKEN_SIZE);
+            } else {
+                snprintf(prompt_LLM, sizeof(prompt_LLM), "{\"model\": \"%s\", \"prompt\": \"%s\", \"options\": {\"num_predict\": %i}}",LLM_MODEL, request.prompt, TOKEN_SIZE);
+            }
             curl_LLM(prompt_LLM);
             get_LLM_message(message_LLM);
             format_message(message_LLM);

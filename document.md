@@ -14,10 +14,10 @@
 - Admin channel and admin commands.
 - Ability to mute users (only allowed for admin user).
 - Ability to shutdown the program, without leaving the IRC server (only allowed for admin user).
+- Unique topic arguments for LLM response generation.
 
 ## Missing Features
-- Narrative for LLM is not stored.
-- Specific topics for LLM are not present.
+- Chat history for LLM is not stored.
 
 ## Makefile
 - Makefile is used to install required libraries with with Ollama if it is chosen to do so.
@@ -32,6 +32,7 @@ These commands can be executed in the admin channel.
 - ignore user0000. Up to 10 users if this limit is exceeded the chat bot will send a notification. Example ignore kaza5555. Currently user name is expected to not be longer than 9 symbols.
 - poweroff - send a command to shutdown the bot without leaving the irc channel.
 - donotchat #Unix - adds a channel to muted channel list, where the bot will not interact with anyone. Up to 32 channels, channel name is expected to be no longer thab 63 symbols.
+- topic number. Example topic 1. Sets a topic that LLM should reference its responses on. Currently only to topics are available. topic 1 = "Topic:Unix", topic 2 = "Topic:Cooking", topic 0 = "No specified topic". If the number is exceeded the bot will allert you or in case of double digit the first number will be used and if it does not exceed the limitations appropriate topic will be selected.
 - More will be added...
 
 ## UNIX Internals
@@ -60,7 +61,8 @@ These commands can be executed in the admin channel.
 - Shared memory is used in several cases. One of them is to monitor if a socket is still alive. If at some point socket breaks bool flag is changed to false. This way the program knows whether this was an intended disconnect or a forced socket disconnection.
 - Another use case is to store muted users. Admin channel collects muted users and then later on server reader process can ignore messages sent from those users.
 - Shared memory is also used for logging messages. Channel monitor processes write into a shared memory buffer, once that buffer is written semaphore is turned on and is not turned off until the message is written into the file.
-- Shared memory also stores muted channels. An admin can create a new rule to ignore all input in a certain channel by sending a command in admin channel. All chatting will be ignored in specified channel. 
+- Shared memory also stores muted channels. An admin can create a new rule to ignore all input in a certain channel by sending a command in admin channel. All chatting will be ignored in specified channel.
+- Shared memory is also used for storing specific topics for LLM response generation and changing the selected topic. Executing specific command in admin channel changes the way LLM generates its responses to specific questions.
 
 ### Signals
 - Signals are used to gracefully close the program when a CTRL + C or a SIGINT signal is received. This approach is used twice, once to stop currently running processes and gracefully exit the program, another time is to gracefully shutdown the program when it is trying to reconnect a socket.
