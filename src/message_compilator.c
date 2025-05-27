@@ -16,6 +16,8 @@ struct RequestLLM {
 void format_message(char user_message[]);
 void curl_LLM(char prompt_LLM[]);
 void get_LLM_message(char message_LLM[]);
+
+// Function used by a process that generates responses
 void message_compilator(int listener_to_llm, int llm_to_listener[][2]){
     struct RequestLLM request;
     char prompt_LLM[1024] = { 0 };

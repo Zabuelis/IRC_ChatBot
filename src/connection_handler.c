@@ -27,12 +27,12 @@ int establish_connection(){
 
     while(i > 0){
         if((client_fd = socket(AF_INET, SOCK_STREAM, 0)) < 0){
-            perror("\n Socket creation error \n");
+            perror("Socket creation error\n");
             return -1;
         }
 
         if(inet_pton(AF_INET, SERVER, &serv_addr.sin_addr) <= 0){
-            perror("Address not supported");
+            perror("Address not supported\n");
             return -1;
         }
 

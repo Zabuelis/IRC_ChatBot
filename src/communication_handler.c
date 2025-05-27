@@ -113,6 +113,7 @@ int handle_communications(int client_fd){
 
     char *log_message;
 
+    // Creating pipes reader_to_listener
     for(int i = 0; i < channel_num; i++){
         if(pipe(reader_to_listener[i])){
             perror("Reader to listener pipes failed");
@@ -120,6 +121,7 @@ int handle_communications(int client_fd){
         }
     }
 
+    // Creating pipes llm_to_listener
     for(int i = 0; i < channel_num; i++){
         if(pipe(llm_to_listener[i])){
             perror("LLM to listener pipes failed");
@@ -127,34 +129,40 @@ int handle_communications(int client_fd){
         }
     }
 
+    // Creating pipe listener_to_llm
     if(pipe(listener_to_llm)){
         perror("Listener to llm pipe failed");
         return -2;
     }
 
+    // Creating pipe reader_to_admin
     if(pipe(reader_to_admin)){
         perror("Reader to admin pipe failed");
         return -2;
     }
 
+    // Creating a semaphore used in generating response messages
     response_semaphore = sem_open(LLM_SEMAPHORE, O_CREAT | O_EXCL, 0600, 1);
     if(response_semaphore == NULL){
         perror("Response semaphore creation failed");
         return -2;
     }
 
+    // Creating a semaphore used in sending messages to the server
     to_server_semaphore = sem_open(WRITE_SERVER, O_CREAT | O_EXCL, 0600, 1);
     if(to_server_semaphore == NULL){
         perror("To server semaphore creation failed");
         return -2;
     }
 
+    // Creating a semaphore used in writing log file
     to_file_semaphore = sem_open(WRITE_FILE, O_CREAT | O_EXCL, 0600, 1);
     if(to_file_semaphore == NULL){
         perror("To file semaphore creation failed");
         return -2;
     }
 
+    // Allocating shared memory for logging
     int shm_id_logging = shmget(1234, 2048, 0666 | IPC_CREAT);
     if(shm_id_logging == -1){
         perror("Shared memory error");
@@ -167,6 +175,7 @@ int handle_communications(int client_fd){
         return -2;
     }
 
+    // Allocating shared memory for ignored user list
     int shm_id_ignore = shmget(4321, sizeof(struct IgnoredUsers), 0666 | IPC_CREAT);
     if(shm_id_ignore == -1){
         perror("Shared memory error");
@@ -179,6 +188,7 @@ int handle_communications(int client_fd){
         return -2;
     }
 
+    // Allocating shared memory for socket status monitoring
     int shm_id_socket = shmget(4231, sizeof(is_socket_alive), 0666 | IPC_CREAT);
     if(shm_id_socket == -1){
         perror("Shared memory error");
@@ -193,6 +203,7 @@ int handle_communications(int client_fd){
 
     *is_socket_alive = true;
 
+    // Allocating shared memory for muted channels
     int shm_id_muted_channels = shmget(1111, sizeof(struct MutedChannels), 0666 | IPC_CREAT);
     if(shm_id_muted_channels == -1){
         perror("Shared memory error");
@@ -211,10 +222,10 @@ int handle_communications(int client_fd){
         return -2;
     } else if(central_reader == 0){
         for(int i = 0; i < channel_num; i++){
-            // close read end of pipe reader_to_listener
+            // Close read end of pipe reader_to_listener
             close(reader_to_listener[i][0]);
         }
-        // close read end of pipe reader_to_admin
+        // Close read end of pipe reader_to_admin
         close(reader_to_admin[0]);
         server_reader(client_fd, reader_to_listener, channel_num, channels, admin_channel_name, reader_to_admin[1], ignored_users, is_socket_alive, muted_channels);
         exit(0);
@@ -226,10 +237,10 @@ int handle_communications(int client_fd){
         return -2;
     } else if (response_generator == 0){
         for(int i = 0; i < channel_num; i++){
-            // close read side of pipe llm_to_listener
+            // Close read side of pipe llm_to_listener
             close(llm_to_listener[i][0]);
         }
-        // close write side of pipe listener_to_llm
+        // Close write side of pipe listener_to_llm
         close(listener_to_llm[1]);
         message_compilator(listener_to_llm[0], llm_to_listener);
         exit(0);
@@ -251,7 +262,7 @@ int handle_communications(int client_fd){
         perror("Forking failed");
         return -2;
     } else if(admin == 0){
-        // close the write end of the reader_to_admin pipe
+        // Close the write end of the reader_to_admin pipe
         close(reader_to_admin[1]);
         admin_channel(admin_channel_name, admin_channel_password, reader_to_admin[0], log_message, logger, client_fd, ignored_users, muted_channels);
         exit(0);
@@ -259,16 +270,15 @@ int handle_communications(int client_fd){
 
     for(int i = 0; i < channel_num; i++){
         channel_workers[i] = fork();
-
         if(channel_workers[i] < 0){
             perror("Forking failed");
             return -2;
         } else if (channel_workers[i] == 0){
-            // close write side of the pipe reader_to_listener
+            // Close write side of the pipe reader_to_listener
             close(reader_to_listener[i][1]);
-            // close the write side of the pipe llm_to_listener
+            // Close the write side of the pipe llm_to_listener
             close(llm_to_listener[i][1]);
-            // close the read side of the pipe listener_to_llm
+            // Close the read side of the pipe listener_to_llm
             close(listener_to_llm[0]);
             server_listener(client_fd, channels[i], i, listener_to_llm[1], llm_to_listener[i][0], reader_to_listener[i][0], logger, log_message);
             exit(0);
@@ -322,6 +332,7 @@ int handle_communications(int client_fd){
     }
 }
 
+// Function used for processes that monitor specified channels
 void server_listener(int client_fd, char channel[], int listener_id, int listener_to_llm, int llm_to_listener, int reader_to_listener, pid_t logger_pid, char *log_message){
     struct RequestLLM request;
     request.listener_id = listener_id;
@@ -367,6 +378,7 @@ void server_listener(int client_fd, char channel[], int listener_id, int listene
     }
 }
 
+// Function used by a process that monitors all data received from the server
 void server_reader(int client_fd, int reader_to_listener[][2], int channel_num, char channels[][64], char admin_channel_name[], int reader_to_admin, struct IgnoredUsers *ignored_users, bool *is_socket_alive, struct MutedChannels *muted_channels){
     char buffer[1024] = { 0 };
     char target_channel[256] = { 0 };
@@ -452,6 +464,7 @@ void get_message(char buffer[]){
     }
 }
 
+// Function used by a process that logs data
 void server_logger(FILE *fptr, char *log_message){
     signal(SIGALRM, logger_wake_signal);
     while(true){
@@ -494,6 +507,7 @@ void load_admin_config(FILE *fptr, char admin_channel_name[], char admin_channel
     }
 }
 
+// Function used by a process that handles admin channel
 void admin_channel(char admin_name[], char admin_pass[], int reader_to_admin, char *log_message, pid_t logger_pid, int client_fd, struct IgnoredUsers *ignored_users, struct MutedChannels *muted_channels){
     char buffer[1024] = { 0 };
     sem_t *to_file_semaphore = sem_open(WRITE_FILE, 0);
