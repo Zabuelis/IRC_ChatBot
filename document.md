@@ -7,14 +7,15 @@
 - libcjson C library.
 
 ## Features 
-- Uses Ollama to generate responses.
+- Uses Ollama to generate responses (Currently token size is set to 30, it can be changed in message_compilator.h).
 - Uses UNIX internals for smooth operation
 - Monitors all defined channels at once.
 - Logs channel messages and generated responses.
 - Admin channel and admin commands.
 - Ability to mute users (only allowed for admin user).
 - Ability to shutdown the program, without leaving the IRC server (only allowed for admin user).
-- Unique topic arguments for LLM response generation.
+- Unique topic arguments for LLM response generation (Only allowed for admin).
+- Ability to mute channels. (Only allowed for admin).
 
 ## Missing Features
 - Chat history for LLM is not stored.
@@ -31,8 +32,8 @@ When the program is launched it first checks whether all required configuration 
 These commands can be executed in the admin channel.
 - ignore user0000. Up to 10 users if this limit is exceeded the chat bot will send a notification. Example ignore kaza5555. Currently user name is expected to not be longer than 9 symbols.
 - poweroff - send a command to shutdown the bot without leaving the irc channel.
-- donotchat #Unix - adds a channel to muted channel list, where the bot will not interact with anyone. Up to 32 channels, channel name is expected to be no longer thab 63 symbols.
-- topic number. Example topic 1. Sets a topic that LLM should reference its responses on. Currently only to topics are available. topic 1 = "Topic:Unix", topic 2 = "Topic:Cooking", topic 0 = "No specified topic". If the number is exceeded the bot will allert you or in case of double digit the first number will be used and if it does not exceed the limitations appropriate topic will be selected.
+- donotchat #Unix - adds a channel to muted channel list, where the bot will not interact with anyone. Up to 32 channels, channel name is expected to be no longer than 63 symbols.
+- topic number. Example topic 1. Sets a topic that LLM should reference its responses on. Currently only two topics are available. topic 1 = "Topic:Unix", topic 2 = "Topic:Cooking", topic 0 = "No specified topic". If the number is exceeded the bot will allert you or in a case of double digit the first number will be used and if it does not exceed the limitations appropriate topic will be selected.
 - More will be added...
 
 ## UNIX Internals
@@ -46,9 +47,10 @@ These commands can be executed in the admin channel.
 - Several processes (up to 32, depends on how many are defined in the config file) are used for interacting with IRC channels.
 - One process is used for generating responses using a LLM.
 - One process is used to monitor an admin channel and identify specified commands, and execute on them. 
+- One process is used to log all the data.
 
 ### Semaphores
-- Used for monitoring when log file is ready for writing and no other process is currently writting to shared memory.
+- Used for monitoring when log file is ready for writing and no other process is currently writing to shared memory.
 - Used for allowing to generate only one message at a time using a LLM. If several requests are sent, other requests wait for a semaphore to open.
 - Used for writting only one message at the time to the server. If several processes have something to write to the server, this semaphore takes care that only one message will be written at that time.
 

@@ -71,7 +71,7 @@ void get_message(char buffer[]);
 void server_listener(int client_fd, char channel[], int listener_id, int listener_to_llm, int llm_to_listener, int reader_to_listener, pid_t logger_pid, char *log_message);
 void server_logger(FILE *fptr, char *log_message);
 void logger_wake_signal(int sig);
-void admin_channel(char admin_name[], char admin_pass[], int reader_to_admin, char *log_message, pid_t logger_pid, int client_fd, struct IgnoredUsers *ignored_users, struct MutedChannels *muted_channels, struct Topics *topics);
+void admin_channel(char admin_name[], char admin_pass[], int reader_to_admin, int client_fd, struct IgnoredUsers *ignored_users, struct MutedChannels *muted_channels, struct Topics *topics);
 int channel_read(FILE *fptr, char channels[][64]);
 void load_admin_config(FILE *fptr, char admin_channel_name[], char admin_channel_password[]);
 void message_log(sem_t *to_file_semaphore, char message[], char *log_message, pid_t logger_pid);
@@ -282,7 +282,7 @@ int handle_communications(int client_fd){
     } else if(admin == 0){
         // Close the write end of the reader_to_admin pipe
         close(reader_to_admin[1]);
-        admin_channel(admin_channel_name, admin_channel_password, reader_to_admin[0], log_message, logger, client_fd, ignored_users, muted_channels, topics);
+        admin_channel(admin_channel_name, admin_channel_password, reader_to_admin[0], client_fd, ignored_users, muted_channels, topics);
         exit(0);
     }
 
@@ -521,7 +521,7 @@ void load_admin_config(FILE *fptr, char admin_channel_name[], char admin_channel
 }
 
 // Function used by a process that handles admin channel
-void admin_channel(char admin_name[], char admin_pass[], int reader_to_admin, char *log_message, pid_t logger_pid, int client_fd, struct IgnoredUsers *ignored_users, struct MutedChannels *muted_channels, struct Topics *topics){
+void admin_channel(char admin_name[], char admin_pass[], int reader_to_admin, int client_fd, struct IgnoredUsers *ignored_users, struct MutedChannels *muted_channels, struct Topics *topics){
     char buffer[1024] = { 0 };
     sem_t *to_file_semaphore = sem_open(WRITE_FILE, 0);
     sem_t *to_server_semaphore = sem_open(WRITE_SERVER, 0);
@@ -538,8 +538,6 @@ void admin_channel(char admin_name[], char admin_pass[], int reader_to_admin, ch
 
     while(1){
         if(read(reader_to_admin, buffer, sizeof(buffer) - 1) > 0){
-
-            message_log(to_file_semaphore, buffer, log_message, logger_pid);
 
             get_message(buffer);
             if(strstr(buffer, "ignore ")){
