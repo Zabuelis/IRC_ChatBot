@@ -1,0 +1,14 @@
+16:10:41.880795 set_robust_list(0x77741152cc20, 24) = 0
+16:10:41.880920 close(23)               = 0
+16:10:41.880993 openat(AT_FDCWD, "/dev/shm/sem.to_file", O_RDWR|O_NOFOLLOW|O_CLOEXEC) = 23
+16:10:41.881151 fstat(23, {st_mode=S_IFREG|0600, st_size=32, ...}) = 0
+16:10:41.881262 close(23)               = 0
+16:10:41.881378 openat(AT_FDCWD, "/dev/shm/sem.to_server", O_RDWR|O_NOFOLLOW|O_CLOEXEC) = 23
+16:10:41.881538 fstat(23, {st_mode=S_IFREG|0600, st_size=32, ...}) = 0
+16:10:41.881745 close(23)               = 0
+16:10:41.881985 getppid()               = 1729044
+16:10:41.882167 write(3<TCP:[192.168.75.21:51344->193.219.91.104:6667]>, "JOIN #SuperAdminChannel\r\n", 25) = 25
+16:10:41.882502 write(3<TCP:[192.168.75.21:51344->193.219.91.104:6667]>, "MODE #SuperAdminChannel +k 123321\r\n", 35) = 35
+16:10:41.882785 read(22, 0x7ffcab300ac0, 1023) = ? ERESTARTSYS (To be restarted if SA_RESTART is set)
+16:12:23.965831 --- SIGINT {si_signo=SIGINT, si_code=SI_KERNEL} ---
+16:12:23.968397 +++ killed by SIGINT +++

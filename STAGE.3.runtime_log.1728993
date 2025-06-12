@@ -1,0 +1,19 @@
+16:09:56.375075 set_robust_list(0x732d39005c20, 24) = 0
+16:09:56.375241 close(7)                = 0
+16:09:56.375352 close(15)               = 0
+16:09:56.375559 close(20)               = 0
+16:09:56.375742 openat(AT_FDCWD, "/dev/shm/sem.llm_semaphore", O_RDWR|O_NOFOLLOW|O_CLOEXEC) = 7
+16:09:56.375858 fstat(7, {st_mode=S_IFREG|0600, st_size=32, ...}) = 0
+16:09:56.376114 close(7)                = 0
+16:09:56.376309 openat(AT_FDCWD, "/dev/shm/sem.to_server", O_RDWR|O_NOFOLLOW|O_CLOEXEC) = 7
+16:09:56.376459 fstat(7, {st_mode=S_IFREG|0600, st_size=32, ...}) = 0
+16:09:56.376596 close(7)                = 0
+16:09:56.376773 openat(AT_FDCWD, "/dev/shm/sem.to_file", O_RDWR|O_NOFOLLOW|O_CLOEXEC) = 7
+16:09:56.376951 fstat(7, {st_mode=S_IFREG|0600, st_size=32, ...}) = 0
+16:09:56.377153 close(7)                = 0
+16:09:56.377306 futex(0x732d3a355000, FUTEX_WAIT_BITSET|FUTEX_CLOCK_REALTIME, 0, NULL, FUTEX_BITSET_MATCH_ANY) = -1 EAGAIN (Resursas laikinai neprieinamas)
+16:09:56.377418 write(3<TCP:[192.168.75.21:58024->193.219.91.104:6667]>, "JOIN #testingFor\r\n", 18) = 18
+16:09:56.377483 futex(0x732d3a355000, FUTEX_WAKE, 1) = 1
+16:09:56.377562 read(6, 0x7ffdee36e204, 1024) = ? ERESTARTSYS (To be restarted if SA_RESTART is set)
+16:10:34.944023 --- SIGINT {si_signo=SIGINT, si_code=SI_KERNEL} ---
+16:10:34.946576 +++ killed by SIGINT +++

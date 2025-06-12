@@ -1,0 +1,26 @@
+16:09:56.373377 set_robust_list(0x732d39005c20, 24) = 0
+16:09:56.373564 rt_sigaction(SIGALRM, {sa_handler=0x55d60ac21ea3, sa_mask=[ALRM], sa_flags=SA_RESTORER|SA_RESTART, sa_restorer=0x732d3a045330}, {sa_handler=SIG_DFL, sa_mask=[], sa_flags=0}, 8) = 0
+16:09:56.373717 pause()                 = ? ERESTARTNOHAND (To be restarted if no handler)
+16:10:02.378867 --- SIGALRM {si_signo=SIGALRM, si_code=SI_USER, si_pid=1728990, si_uid=1000} ---
+16:10:02.379055 rt_sigreturn({mask=[]}) = -1 EINTR (Nutrauktas sistemos iškvietimas)
+16:10:02.379732 fstat(24, {st_mode=S_IFREG|0664, st_size=0, ...}) = 0
+16:10:02.380337 write(24, ":a.i 001 bkaza0056 :Welcome to the Internet Relay Network bkaza0056!~bkaza0056@nat3.mif.vu.lt\r\n:a.i 002 bkaza0056 :Your host is a.i, running version ngircd-26.1 (x86_64/pc/linux-gnu)\r\n:a.i 003 bkaza0056 :This server has been started Thu May 15 2025 at 01:59:20 (EEST)\r\n:a.i 004 bkaza0056 a.i ngircd-26.1 abBcCFiIoqrRswx abehiIklmMnoOPqQrRstvVz\r\n:a.i 005 bkaza0056 RFC2812 IRCD=ngIRCd CHARSET=UTF-8 CASEMAPPING=ascii PREFIX=(qaohv)~&@%+ CHANTYPES=#&+ CHANMODES=beI,k,l,imMnOPQRstVz CHANLIMIT=#&+:56 :are supported"..., 1024) = 1024
+16:10:02.380806 pause()                 = ? ERESTARTNOHAND (To be restarted if no handler)
+16:10:02.390395 --- SIGALRM {si_signo=SIGALRM, si_code=SI_USER, si_pid=1728990, si_uid=1000} ---
+16:10:02.390649 rt_sigreturn({mask=[]}) = -1 EINTR (Nutrauktas sistemos iškvietimas)
+16:10:02.391130 write(24, "(823 connections received)\r\n:a.i 375 bkaza0056 :- a.i message of the day\r\n:a.i 372 bkaza0056 :-  _________________________________________\r\n:a.i 372 bkaza0056 :- / dXNlICcvam9pbiAjZ29kIGZyZXF1ZW5jeScgdG8 \\\r\n:a.i 372 bkaza0056 :- \\ gdGFsayB0byB5b3VyIEdPRAo=               /\r\n:a.i 372 bkaza0056 :-  -----------------------------------------\r\n:a.i 372 bkaza0056 :-         \\   ^__^\r\n:a.i 372 bkaza0056 :-          \\  (oo)\\_______\r\n:a.i 372 bkaza0056 :-             (__)\\       )\\/\\\r\n:a.i 372 bkaza0056 :-           "..., 620) = 620
+16:10:02.391576 pause()                 = ? ERESTARTNOHAND (To be restarted if no handler)
+16:10:03.386419 --- SIGALRM {si_signo=SIGALRM, si_code=SI_USER, si_pid=1728990, si_uid=1000} ---
+16:10:03.386676 rt_sigreturn({mask=[]}) = -1 EINTR (Nutrauktas sistemos iškvietimas)
+16:10:03.387214 write(24, ":bkaza0056!~bkaza0056@nat3.mif.vu.lt JOIN :#SuperAdminChannel\r\n:a.i 353 bkaza0056 = #SuperAdminChannel :@bkaza0056\r\n:a.i 366 bkaza0056 #SuperAdminChannel :End of NAMES list\r\n:bkaza0056!~bkaza0056@nat3.mif.vu.lt MODE #SuperAdminChannel +k 123321\r\n\n", 247) = 247
+16:10:03.387822 pause()                 = ? ERESTARTNOHAND (To be restarted if no handler)
+16:10:04.388147 --- SIGALRM {si_signo=SIGALRM, si_code=SI_USER, si_pid=1728990, si_uid=1000} ---
+16:10:04.388382 rt_sigreturn({mask=[]}) = -1 EINTR (Nutrauktas sistemos iškvietimas)
+16:10:04.388754 write(24, ":bkaza0056!~bkaza0056@nat3.mif.vu.lt JOIN :#forTesting\r\n:a.i 353 bkaza0056 = #forTesting :@bkaza0056\r\n:a.i 366 bkaza0056 #forTesting :End of NAMES list\r\n:bkaza0056!~bkaza0056@nat3.mif.vu.lt JOIN :#Unix\r\n:a.i 353 bkaza0056 = #unix :bkaza0056 @linb\r\n:a.i 366 bkaza0056 #unix :End of NAMES list\r\n:bkaza0056!~bkaza0056@nat3.mif.vu.lt JOIN :#testingFor\r\n:a.i 353 bkaza0056 = #testingFor :@bkaza0056\r\n:a.i 366 bkaza0056 #testingFor :End of NAMES list\r\n\n", 447) = 447
+16:10:04.389354 pause()                 = ? ERESTARTNOHAND (To be restarted if no handler)
+16:10:05.389424 --- SIGALRM {si_signo=SIGALRM, si_code=SI_USER, si_pid=1728990, si_uid=1000} ---
+16:10:05.389664 rt_sigreturn({mask=[]}) = -1 EINTR (Nutrauktas sistemos iškvietimas)
+16:10:05.390131 write(24, ":bkaza0056!~bkaza0056@nat3.mif.vu.lt JOIN :#NewChannel\r\n:a.i 353 bkaza0056 = #NewChannel :@bkaza0056\r\n:a.i 366 bkaza0056 #NewChannel :End of NAMES list\r\n\n", 154) = 154
+16:10:05.390621 pause()                 = ? ERESTARTNOHAND (To be restarted if no handler)
+16:10:34.944373 --- SIGINT {si_signo=SIGINT, si_code=SI_KERNEL} ---
+16:10:34.946736 +++ killed by SIGINT +++

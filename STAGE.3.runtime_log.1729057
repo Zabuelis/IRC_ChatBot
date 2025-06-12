@@ -1,0 +1,18 @@
+16:10:41.882383 set_robust_list(0x77741152cc20, 24) = 0
+16:10:41.882537 close(11)               = 0
+16:10:41.882677 close(19)               = 0
+16:10:41.882807 close(20)               = 0
+16:10:41.882917 openat(AT_FDCWD, "/dev/shm/sem.llm_semaphore", O_RDWR|O_NOFOLLOW|O_CLOEXEC) = 11
+16:10:41.883041 fstat(11, {st_mode=S_IFREG|0600, st_size=32, ...}) = 0
+16:10:41.883150 close(11)               = 0
+16:10:41.883260 openat(AT_FDCWD, "/dev/shm/sem.to_server", O_RDWR|O_NOFOLLOW|O_CLOEXEC) = 11
+16:10:41.883369 fstat(11, {st_mode=S_IFREG|0600, st_size=32, ...}) = 0
+16:10:41.883453 close(11)               = 0
+16:10:41.883505 openat(AT_FDCWD, "/dev/shm/sem.to_file", O_RDWR|O_NOFOLLOW|O_CLOEXEC) = 11
+16:10:41.883578 fstat(11, {st_mode=S_IFREG|0600, st_size=32, ...}) = 0
+16:10:41.883632 close(11)               = 0
+16:10:41.883704 futex(0x77741287b000, FUTEX_WAIT_BITSET|FUTEX_CLOCK_REALTIME, 0, NULL, FUTEX_BITSET_MATCH_ANY) = 0
+16:10:41.883798 write(3<TCP:[192.168.75.21:51344->193.219.91.104:6667]>, "JOIN #NewChannel\r\n", 18) = 18
+16:10:41.883862 read(10, 0x7ffcab3002b4, 1024) = ? ERESTARTSYS (To be restarted if SA_RESTART is set)
+16:12:23.965535 --- SIGINT {si_signo=SIGINT, si_code=SI_KERNEL} ---
+16:12:23.968157 +++ killed by SIGINT +++

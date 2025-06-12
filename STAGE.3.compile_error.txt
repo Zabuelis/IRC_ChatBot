@@ -1,0 +1,17 @@
+src/message_compilator.c: In function ‘message_compilator’:
+src/message_compilator.c:32:93: warning: ‘%s’ directive output may be truncated writing up to 1023 bytes into a region of size 991 [-Wformat-truncation=]
+   32 |                 snprintf(prompt_LLM, sizeof(prompt_LLM), "{\"model\": \"%s\", \"prompt\": \"%s\", \"options\": {\"num_predict\": %i}}",LLM_MODEL, request.prompt, TOKEN_SIZE);
+      |                                                                                             ^~                                                    ~~~~~~~~~~~~~~
+src/message_compilator.c:32:17: note: ‘snprintf’ output between 68 and 1091 bytes into a destination of size 1024
+   32 |                 snprintf(prompt_LLM, sizeof(prompt_LLM), "{\"model\": \"%s\", \"prompt\": \"%s\", \"options\": {\"num_predict\": %i}}",LLM_MODEL, request.prompt, TOKEN_SIZE);
+      |                 ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+src/message_compilator.c:30:93: warning: ‘%s’ directive output may be truncated writing up to 1023 bytes into a region of size 991 [-Wformat-truncation=]
+   30 |                 snprintf(prompt_LLM, sizeof(prompt_LLM), "{\"model\": \"%s\", \"prompt\": \"%s %s\", \"options\": {\"num_predict\": %i}}",LLM_MODEL, request.prompt, topics->selected_topic[topics->topic_num - 1], TOKEN_SIZE);
+      |                                                                                             ^~                                                       ~~~~~~~~~~~~~~
+src/message_compilator.c:30:17: note: ‘snprintf’ output between 69 and 1155 bytes into a destination of size 1024
+   30 |                 snprintf(prompt_LLM, sizeof(prompt_LLM), "{\"model\": \"%s\", \"prompt\": \"%s %s\", \"options\": {\"num_predict\": %i}}",LLM_MODEL, request.prompt, topics->selected_topic[topics->topic_num - 1], TOKEN_SIZE);
+      |                 ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+src/connection_handler.c: In function ‘establish_connection’:
+src/connection_handler.c:34:12: warning: implicit declaration of function ‘inet_pton’ [-Wimplicit-function-declaration]
+   34 |         if(inet_pton(AF_INET, SERVER, &serv_addr.sin_addr) <= 0){
+      |            ^~~~~~~~~

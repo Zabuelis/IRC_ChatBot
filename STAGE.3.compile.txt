@@ -1,0 +1,5 @@
+gcc -Iinclude -c src/main.c -o src/main.o
+gcc -Iinclude -c src/message_compilator.c -o src/message_compilator.o
+gcc -Iinclude -c src/connection_handler.c -o src/connection_handler.o
+gcc -Iinclude -c src/communication_handler.c -o src/communication_handler.o
+gcc src/main.o src/message_compilator.o src/connection_handler.o src/communication_handler.o -o client -lcurl -lcjson

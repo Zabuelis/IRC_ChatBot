@@ -1,0 +1,2 @@
+Check IP hardcoded
+include/connection_handler.h:#define SERVER "10.1.0.46"

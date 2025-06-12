@@ -1,0 +1,17 @@
+16:10:41.881498 set_robust_list(0x77741152cc20, 24) = 0
+16:10:41.881620 close(7)                = 0
+16:10:41.881719 close(15)               = 0
+16:10:41.881863 close(20)               = 0
+16:10:41.882032 openat(AT_FDCWD, "/dev/shm/sem.llm_semaphore", O_RDWR|O_NOFOLLOW|O_CLOEXEC) = 7
+16:10:41.882209 fstat(7, {st_mode=S_IFREG|0600, st_size=32, ...}) = 0
+16:10:41.882486 close(7)                = 0
+16:10:41.882648 openat(AT_FDCWD, "/dev/shm/sem.to_server", O_RDWR|O_NOFOLLOW|O_CLOEXEC) = 7
+16:10:41.882770 fstat(7, {st_mode=S_IFREG|0600, st_size=32, ...}) = 0
+16:10:41.882899 close(7)                = 0
+16:10:41.883019 openat(AT_FDCWD, "/dev/shm/sem.to_file", O_RDWR|O_NOFOLLOW|O_CLOEXEC) = 7
+16:10:41.883240 fstat(7, {st_mode=S_IFREG|0600, st_size=32, ...}) = 0
+16:10:41.883402 close(7)                = 0
+16:10:41.883521 write(3<TCP:[192.168.75.21:51344->193.219.91.104:6667]>, "JOIN #testingFor\r\n", 18) = 18
+16:10:41.883648 read(6, 0x7ffcab3002b4, 1024) = ? ERESTARTSYS (To be restarted if SA_RESTART is set)
+16:12:23.965692 --- SIGINT {si_signo=SIGINT, si_code=SI_KERNEL} ---
+16:12:23.968327 +++ killed by SIGINT +++
