@@ -1,9 +1,0 @@
-16:10:41.879600 set_robust_list(0x77741152cc20, 24) = 0
-16:10:41.879775 close(12)               = 0
-16:10:41.879878 close(14)               = 0
-16:10:41.879948 close(16)               = 0
-16:10:41.879994 close(18)               = 0
-16:10:41.880151 close(21)               = 0
-16:10:41.880219 read(20, 0x7ffcab2ffec0, 1028) = ? ERESTARTSYS (To be restarted if SA_RESTART is set)
-16:12:23.966587 --- SIGINT {si_signo=SIGINT, si_code=SI_KERNEL} ---
-16:12:23.969140 +++ killed by SIGINT +++

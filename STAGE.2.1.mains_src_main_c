@@ -1,5 +1,0 @@
-main() <int main () at src/main.c:5>:
-    access()
-    perror()
-    establish_connection()
-    printf()
